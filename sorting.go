@@ -2,7 +2,7 @@ package kbucket
 
 import (
 	"container/list"
-	peer "gx/ipfs/QmRBqJF7hb8ZSpRcMwUt8hNhydWcxGEhtk81HKq6oUwKvs/go-libp2p-peer"
+	peer "github.com/ipfs/go-libp2p-peer"
 	"sort"
 )
 

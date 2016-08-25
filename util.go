@@ -5,10 +5,10 @@ import (
 	"crypto/sha256"
 	"errors"
 
-	key "github.com/ipfs/go-ipfs/blocks/key"
+	u "github.com/ipfs/go-ipfs-util"
 	ks "github.com/ipfs/go-ipfs/routing/keyspace"
-	peer "gx/ipfs/QmRBqJF7hb8ZSpRcMwUt8hNhydWcxGEhtk81HKq6oUwKvs/go-libp2p-peer"
-	u "gx/ipfs/QmZNVWh8LLjAavuQ2JXuFmuYH3C11xo988vSgp7UQrTRj1/go-ipfs-util"
+	key "github.com/ipfs/go-key"
+	peer "github.com/ipfs/go-libp2p-peer"
 )
 
 // Returned if a routing table query returns no results. This is NOT expected
