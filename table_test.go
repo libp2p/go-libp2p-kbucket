@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	tu "github.com/ipfs/go-ipfs/thirdparty/testutil"
 	peer "github.com/ipfs/go-libp2p-peer"
 	pstore "github.com/ipfs/go-libp2p-peerstore"
+	tu "github.com/libp2p/go-testutil"
 )
 
 // Test basic features of the bucket struct
