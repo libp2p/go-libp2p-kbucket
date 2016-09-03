@@ -8,9 +8,9 @@
   },
   "gxDependencies": [
     {
-      "hash": "QmNQynaz7qfriSUJkiEZUrm2Wen1u3Kj9goZzWtrPyu7XR",
+      "hash": "QmSpJByNKFX1sCsHBEp3R73FL4NF6FnQTEGyNAXHm2GS52",
       "name": "go-log",
-      "version": "1.1.2"
+      "version": "1.2.0"
     },
     {
       "author": "whyrusleeping",
@@ -35,9 +35,9 @@
       "version": "1.0.1"
     },
     {
-      "hash": "QmT9tw9haE1UjSYu51uUxQ8bEqefMdRLKJQcryBEAM7Zuq",
+      "hash": "QmXhU58jbgCbuAvo3Eq6VXg67yGSNArpzJwk3g54NuYVfx",
       "name": "go-key",
-      "version": "1.0.0"
+      "version": "1.0.1"
     }
   ],
   "gxVersion": "0.4.0",
