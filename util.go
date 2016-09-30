@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	u "github.com/ipfs/go-ipfs-util"
-	key "github.com/ipfs/go-key"
 	peer "github.com/ipfs/go-libp2p-peer"
 	ks "github.com/libp2p/go-libp2p-kbucket/keyspace"
 )
@@ -46,13 +45,13 @@ func ConvertPeerID(id peer.ID) ID {
 }
 
 // ConvertKey creates a DHT ID by hashing a local key (String)
-func ConvertKey(id key.Key) ID {
+func ConvertKey(id string) ID {
 	hash := sha256.Sum256([]byte(id))
 	return hash[:]
 }
 
 // Closer returns true if a is closer to key than b is
-func Closer(a, b peer.ID, key key.Key) bool {
+func Closer(a, b peer.ID, key string) bool {
 	aid := ConvertPeerID(a)
 	bid := ConvertPeerID(b)
 	tgt := ConvertKey(key)
