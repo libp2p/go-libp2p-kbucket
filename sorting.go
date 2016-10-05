@@ -2,8 +2,9 @@ package kbucket
 
 import (
 	"container/list"
-	peer "github.com/ipfs/go-libp2p-peer"
 	"sort"
+
+	peer "github.com/libp2p/go-libp2p-peer"
 )
 
 // A helper struct to sort peers by their distance to the local node

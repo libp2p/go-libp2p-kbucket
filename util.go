@@ -6,8 +6,8 @@ import (
 	"errors"
 
 	u "github.com/ipfs/go-ipfs-util"
-	peer "github.com/ipfs/go-libp2p-peer"
 	ks "github.com/libp2p/go-libp2p-kbucket/keyspace"
+	peer "github.com/libp2p/go-libp2p-peer"
 )
 
 // Returned if a routing table query returns no results. This is NOT expected
