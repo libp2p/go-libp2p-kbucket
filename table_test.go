@@ -48,6 +48,51 @@ func TestBucket(t *testing.T) {
 	}
 }
 
+func TestTableCallbacks(t *testing.T) {
+	local := tu.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
+
+	peers := make([]peer.ID, 100)
+	for i := 0; i < 100; i++ {
+		peers[i] = tu.RandPeerIDFatal(t)
+	}
+
+	pset := make(map[peer.ID]struct{})
+	rt.PeerAdded = func(p peer.ID) {
+		pset[p] = struct{}{}
+	}
+	rt.PeerRemoved = func(p peer.ID) {
+		delete(pset, p)
+	}
+
+	rt.Update(peers[0])
+	if _, ok := pset[peers[0]]; !ok {
+		t.Fatal("should have this peer")
+	}
+
+	rt.Remove(peers[0])
+	if _, ok := pset[peers[0]]; ok {
+		t.Fatal("should not have this peer")
+	}
+
+	for _, p := range peers {
+		rt.Update(p)
+	}
+
+	out := rt.ListPeers()
+	for _, outp := range out {
+		if _, ok := pset[outp]; !ok {
+			t.Fatal("should have peer in the peerset")
+		}
+		delete(pset, outp)
+	}
+
+	if len(pset) > 0 {
+		t.Fatal("have peers in peerset that were not in the table", len(pset))
+	}
+}
+
 // Right now, this just makes sure that it doesnt hang or crash
 func TestTableUpdate(t *testing.T) {
 	local := tu.RandPeerIDFatal(t)

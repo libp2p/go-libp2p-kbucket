@@ -32,16 +32,24 @@ type RoutingTable struct {
 	// kBuckets define all the fingers to other nodes.
 	Buckets    []*Bucket
 	bucketsize int
+
+	// notification functions
+	PeerRemoved func(peer.ID)
+	PeerAdded   func(peer.ID)
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
 func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m pstore.Metrics) *RoutingTable {
-	rt := new(RoutingTable)
-	rt.Buckets = []*Bucket{newBucket()}
-	rt.bucketsize = bucketsize
-	rt.local = localID
-	rt.maxLatency = latency
-	rt.metrics = m
+	rt := &RoutingTable{
+		Buckets:     []*Bucket{newBucket()},
+		bucketsize:  bucketsize,
+		local:       localID,
+		maxLatency:  latency,
+		metrics:     m,
+		PeerRemoved: func(peer.ID) {},
+		PeerAdded:   func(peer.ID) {},
+	}
+
 	return rt
 }
 
@@ -74,17 +82,18 @@ func (rt *RoutingTable) Update(p peer.ID) {
 
 	// New peer, add to bucket
 	bucket.PushFront(p)
+	rt.PeerAdded(p)
 
 	// Are we past the max bucket size?
 	if bucket.Len() > rt.bucketsize {
 		// If this bucket is the rightmost bucket, and its full
 		// we need to split it and create a new bucket
 		if bucketID == len(rt.Buckets)-1 {
-			rt.nextBucket()
+			rt.PeerRemoved(rt.nextBucket())
 			return
 		} else {
 			// If the bucket cant split kick out least active node
-			bucket.PopBack()
+			rt.PeerRemoved(bucket.PopBack())
 			return
 		}
 	}
@@ -105,6 +114,7 @@ func (rt *RoutingTable) Remove(p peer.ID) {
 
 	bucket := rt.Buckets[bucketID]
 	bucket.Remove(p)
+	rt.PeerRemoved(p)
 }
 
 func (rt *RoutingTable) nextBucket() peer.ID {
