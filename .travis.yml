@@ -5,10 +5,7 @@ os:
 language: go
 
 go:
-    - 1.7
-
-env:
-    - GO15VENDOREXPERIMENT=1
+    - 1.8
 
 install: true
 
