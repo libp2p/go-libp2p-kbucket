@@ -205,7 +205,6 @@ func (rt *RoutingTable) Size() int {
 }
 
 // ListPeers takes a RoutingTable and returns a list of all peers from all buckets in the table.
-// NOTE: This is potentially unsafe... use at your own risk
 func (rt *RoutingTable) ListPeers() []peer.ID {
 	var peers []peer.ID
 	rt.tabLock.RLock()
