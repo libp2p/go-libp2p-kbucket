@@ -12,6 +12,7 @@ install: true
 script:
   - make deps
   - go test ./...
+  - go vet ./...
 
 cache:
     directories:
