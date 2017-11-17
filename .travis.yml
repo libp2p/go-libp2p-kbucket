@@ -5,14 +5,13 @@ os:
 language: go
 
 go:
-    - 1.9.2
+    - 1.9.x
 
-install: true
+before_install:
+  - make deps
 
 script:
-  - make deps
-  - go test ./...
-  - go vet ./...
+  - bash <(curl -s https://raw.githubusercontent.com/ipfs/ci-helpers/master/travis-ci/run-standard-tests.sh)
 
 cache:
     directories:
