@@ -25,9 +25,9 @@
       "version": "1.4.9"
     },
     {
-      "hash": "QmWRCn8vruNAzHx8i6SAXinuheRitKEGu8c7m26stKvsYx",
+      "hash": "QmQgLZP9haZheimMHqqAjJh2LhRmNfEoZDfbtkpeMhi9xK",
       "name": "go-testutil",
-      "version": "1.1.11"
+      "version": "1.1.12"
     },
     {
       "author": "whyrusleeping",
@@ -41,6 +41,6 @@
   "license": "MIT",
   "name": "go-libp2p-kbucket",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "2.1.13"
+  "version": "2.1.14"
 }
 
