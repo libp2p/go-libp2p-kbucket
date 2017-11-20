@@ -8,6 +8,9 @@ language: go
 go:
     - 1.9.x
 
+env:
+  - GOTFLAGS="-race"
+
 install:
   - make deps
 
