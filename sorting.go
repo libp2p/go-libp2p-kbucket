@@ -25,6 +25,11 @@ func (p peerSorterArr) Less(a, b int) bool {
 //
 
 func copyPeersFromList(target ID, peerArr peerSorterArr, peerList *list.List) peerSorterArr {
+	if cap(peerArr) < len(peerArr)+peerList.Len() {
+		newArr := make(peerSorterArr, 0, len(peerArr)+peerList.Len())
+		copy(newArr, peerArr)
+		peerArr = newArr
+	}
 	for e := peerList.Front(); e != nil; e = e.Next() {
 		p := e.Value.(peer.ID)
 		pID := ConvertPeerID(p)
@@ -38,7 +43,7 @@ func copyPeersFromList(target ID, peerArr peerSorterArr, peerList *list.List) pe
 }
 
 func SortClosestPeers(peers []peer.ID, target ID) []peer.ID {
-	var psarr peerSorterArr
+	psarr := make(peerSorterArr, 0, len(peers))
 	for _, p := range peers {
 		pID := ConvertPeerID(p)
 		pd := &peerDistance{
@@ -48,7 +53,7 @@ func SortClosestPeers(peers []peer.ID, target ID) []peer.ID {
 		psarr = append(psarr, pd)
 	}
 	sort.Sort(psarr)
-	var out []peer.ID
+	out := make([]peer.ID, 0, len(psarr))
 	for _, p := range psarr {
 		out = append(out, p.p)
 	}
