@@ -20,9 +20,9 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmdeiKhUy1TVGBaKxt7y1QmBDLBdisSrLJ1x58Eoj4PXUh",
+      "hash": "QmZb7hAgQEhW9dBbzBudU39gCeD4zbe6xafD52LUuF4cUN",
       "name": "go-libp2p-peerstore",
-      "version": "1.4.17"
+      "version": "1.4.18"
     },
     {
       "hash": "QmUJzxQQ2kzwQubsMqBTr1NGDpLfh7pGA2E1oaJULcKDPq",
@@ -41,6 +41,6 @@
   "license": "MIT",
   "name": "go-libp2p-kbucket",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "2.1.18"
+  "version": "2.2.0"
 }
 
