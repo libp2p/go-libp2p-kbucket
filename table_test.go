@@ -136,6 +136,35 @@ func TestTableFind(t *testing.T) {
 	}
 }
 
+func TestTableEldestPreferred(t *testing.T) {
+	local := tu.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
+
+	// generate size + 1 peers to saturate a bucket
+	peers := make([]peer.ID, 15)
+	for i := 0; i < 15; {
+		if p := tu.RandPeerIDFatal(t); commonPrefixLen(ConvertPeerID(local), ConvertPeerID(p)) == 0 {
+			peers[i] = p
+			i++
+		}
+	}
+
+	// test 10 first peers are accepted.
+	for _, p := range peers[:10] {
+		if _, err := rt.Update(p); err != nil {
+			t.Errorf("expected all 10 peers to be accepted; instead got: %v", err)
+		}
+	}
+
+	// test next 5 peers are rejected.
+	for _, p := range peers[10:] {
+		if _, err := rt.Update(p); err != ErrPeerRejectedNoCapacity {
+			t.Errorf("expected extra 5 peers to be rejected; instead got: %v", err)
+		}
+	}
+}
+
 func TestTableFindMultiple(t *testing.T) {
 	local := tu.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
