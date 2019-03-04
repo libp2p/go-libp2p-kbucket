@@ -32,7 +32,7 @@ func TestBucket(t *testing.T) {
 	llist := b.list
 	for e := llist.Front(); e != nil; e = e.Next() {
 		p := ConvertPeerID(e.Value.(peer.ID))
-		cpl := commonPrefixLen(p, localID)
+		cpl := CommonPrefixLen(p, localID)
 		if cpl > 0 {
 			t.Fatalf("Split failed. found id with cpl > 0 in 0 bucket")
 		}
@@ -41,7 +41,7 @@ func TestBucket(t *testing.T) {
 	rlist := spl.list
 	for e := rlist.Front(); e != nil; e = e.Next() {
 		p := ConvertPeerID(e.Value.(peer.ID))
-		cpl := commonPrefixLen(p, localID)
+		cpl := CommonPrefixLen(p, localID)
 		if cpl == 0 {
 			t.Fatalf("Split failed. found id with cpl == 0 in non 0 bucket")
 		}
@@ -144,7 +144,7 @@ func TestTableEldestPreferred(t *testing.T) {
 	// generate size + 1 peers to saturate a bucket
 	peers := make([]peer.ID, 15)
 	for i := 0; i < 15; {
-		if p := tu.RandPeerIDFatal(t); commonPrefixLen(ConvertPeerID(local), ConvertPeerID(p)) == 0 {
+		if p := tu.RandPeerIDFatal(t); CommonPrefixLen(ConvertPeerID(local), ConvertPeerID(p)) == 0 {
 			peers[i] = p
 			i++
 		}
