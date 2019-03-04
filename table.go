@@ -60,7 +60,7 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m pstore
 // Update adds or moves the given peer to the front of its respective bucket
 func (rt *RoutingTable) Update(p peer.ID) (evicted peer.ID, err error) {
 	peerID := ConvertPeerID(p)
-	cpl := commonPrefixLen(peerID, rt.local)
+	cpl := CommonPrefixLen(peerID, rt.local)
 
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
@@ -117,7 +117,7 @@ func (rt *RoutingTable) Remove(p peer.ID) {
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
 	peerID := ConvertPeerID(p)
-	cpl := commonPrefixLen(peerID, rt.local)
+	cpl := CommonPrefixLen(peerID, rt.local)
 
 	bucketID := cpl
 	if bucketID >= len(rt.Buckets) {
@@ -166,7 +166,7 @@ func (rt *RoutingTable) NearestPeer(id ID) peer.ID {
 
 // NearestPeers returns a list of the 'count' closest peers to the given ID
 func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
-	cpl := commonPrefixLen(id, rt.local)
+	cpl := CommonPrefixLen(id, rt.local)
 
 	rt.tabLock.RLock()
 
