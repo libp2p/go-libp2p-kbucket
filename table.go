@@ -4,7 +4,6 @@ package kbucket
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
@@ -169,6 +168,7 @@ func (rt *RoutingTable) NearestPeer(id ID) peer.ID {
 func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 	cpl := CommonPrefixLen(id, rt.local)
 
+	// It's assumed that this also protects the buckets.
 	rt.tabLock.RLock()
 
 	// Get bucket at cpl index or last bucket
@@ -178,32 +178,32 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 	}
 	bucket = rt.Buckets[cpl]
 
-	peerArr := make(peerSorterArr, 0, count)
-	peerArr = copyPeersFromList(id, peerArr, bucket.list)
-	if len(peerArr) < count {
+	pds := peerDistanceSorter{
+		peers:  make([]peerDistance, 0, 3*rt.bucketsize),
+		target: id,
+	}
+	pds.appendPeersFromList(bucket.list)
+	if pds.Len() < count {
 		// In the case of an unusual split, one bucket may be short or empty.
 		// if this happens, search both surrounding buckets for nearby peers
 		if cpl > 0 {
-			plist := rt.Buckets[cpl-1].list
-			peerArr = copyPeersFromList(id, peerArr, plist)
+			pds.appendPeersFromList(rt.Buckets[cpl-1].list)
 		}
-
 		if cpl < len(rt.Buckets)-1 {
-			plist := rt.Buckets[cpl+1].list
-			peerArr = copyPeersFromList(id, peerArr, plist)
+			pds.appendPeersFromList(rt.Buckets[cpl+1].list)
 		}
 	}
 	rt.tabLock.RUnlock()
 
 	// Sort by distance to local peer
-	sort.Sort(peerArr)
+	pds.sort()
 
-	if count < len(peerArr) {
-		peerArr = peerArr[:count]
+	if count < pds.Len() {
+		pds.peers = pds.peers[:count]
 	}
 
-	out := make([]peer.ID, 0, len(peerArr))
-	for _, p := range peerArr {
+	out := make([]peer.ID, 0, pds.Len())
+	for _, p := range pds.peers {
 		out = append(out, p.p)
 	}
 
