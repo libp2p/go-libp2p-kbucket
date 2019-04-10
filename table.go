@@ -182,15 +182,15 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 		peers:  make([]peerDistance, 0, 3*rt.bucketsize),
 		target: id,
 	}
-	pds = pds.appendPeersFromList(bucket.list)
+	pds.appendPeersFromList(bucket.list)
 	if pds.Len() < count {
 		// In the case of an unusual split, one bucket may be short or empty.
 		// if this happens, search both surrounding buckets for nearby peers
 		if cpl > 0 {
-			pds = pds.appendPeersFromList(rt.Buckets[cpl-1].list)
+			pds.appendPeersFromList(rt.Buckets[cpl-1].list)
 		}
 		if cpl < len(rt.Buckets)-1 {
-			pds = pds.appendPeersFromList(rt.Buckets[cpl+1].list)
+			pds.appendPeersFromList(rt.Buckets[cpl+1].list)
 		}
 	}
 	rt.tabLock.RUnlock()

@@ -19,34 +19,28 @@ type peerDistanceSorter struct {
 	target ID
 }
 
-func (pds peerDistanceSorter) Len() int      { return len(pds.peers) }
-func (pds peerDistanceSorter) Swap(a, b int) { pds.peers[a], pds.peers[b] = pds.peers[b], pds.peers[a] }
-func (pds peerDistanceSorter) Less(a, b int) bool {
+func (pds *peerDistanceSorter) Len() int      { return len(pds.peers) }
+func (pds *peerDistanceSorter) Swap(a, b int) { pds.peers[a], pds.peers[b] = pds.peers[b], pds.peers[a] }
+func (pds *peerDistanceSorter) Less(a, b int) bool {
 	return pds.peers[a].distance.less(pds.peers[b].distance)
 }
 
 // Append the peer.ID to the sorter's slice. It may no longer be sorted.
-func (pds peerDistanceSorter) appendPeer(p peer.ID) peerDistanceSorter {
+func (pds *peerDistanceSorter) appendPeer(p peer.ID) {
 	pds.peers = append(pds.peers, peerDistance{
 		p:        p,
 		distance: xor(pds.target, ConvertPeerID(p)),
 	})
-	return pds
 }
 
 // Append the peer.ID values in the list to the sorter's slice. It may no longer be sorted.
-func (pds peerDistanceSorter) appendPeersFromList(l *list.List) peerDistanceSorter {
-	startLen := pds.Len()
+func (pds *peerDistanceSorter) appendPeersFromList(l *list.List) {
 	for e := l.Front(); e != nil; e = e.Next() {
-		pds = pds.appendPeer(e.Value.(peer.ID))
+		pds.appendPeer(e.Value.(peer.ID))
 	}
-	if pds.Len() != startLen+l.Len() {
-		panic("len did not increase")
-	}
-	return pds
 }
 
-func (pds peerDistanceSorter) sort() {
+func (pds *peerDistanceSorter) sort() {
 	sort.Sort(pds)
 }
 
@@ -57,7 +51,7 @@ func SortClosestPeers(peers []peer.ID, target ID) []peer.ID {
 		target: target,
 	}
 	for _, p := range peers {
-		sorter = sorter.appendPeer(p)
+		sorter.appendPeer(p)
 	}
 	sorter.sort()
 	out := make([]peer.ID, 0, sorter.Len())
