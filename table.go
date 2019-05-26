@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peerstore"
+
 	logging "github.com/ipfs/go-log"
-	peer "github.com/libp2p/go-libp2p-peer"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
 
 var log = logging.Logger("table")
@@ -27,7 +28,7 @@ type RoutingTable struct {
 	tabLock sync.RWMutex
 
 	// latency metrics
-	metrics pstore.Metrics
+	metrics peerstore.Metrics
 
 	// Maximum acceptable latency for peers in this cluster
 	maxLatency time.Duration
@@ -42,7 +43,7 @@ type RoutingTable struct {
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
-func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m pstore.Metrics) *RoutingTable {
+func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics) *RoutingTable {
 	rt := &RoutingTable{
 		Buckets:     []*Bucket{newBucket()},
 		bucketsize:  bucketsize,

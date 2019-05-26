@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"errors"
 
-	u "github.com/ipfs/go-ipfs-util"
+	"github.com/libp2p/go-libp2p-core/peer"
 	ks "github.com/libp2p/go-libp2p-kbucket/keyspace"
-	peer "github.com/libp2p/go-libp2p-peer"
+
+	u "github.com/ipfs/go-ipfs-util"
 	sha256 "github.com/minio/sha256-simd"
 )
 
