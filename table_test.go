@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	peer "github.com/libp2p/go-libp2p-peer"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/test"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
-	tu "github.com/libp2p/go-testutil"
 )
 
 // Test basic features of the bucket struct
@@ -16,11 +16,11 @@ func TestBucket(t *testing.T) {
 
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 100; i++ {
-		peers[i] = tu.RandPeerIDFatal(t)
+		peers[i] = test.RandPeerIDFatal(t)
 		b.PushFront(peers[i])
 	}
 
-	local := tu.RandPeerIDFatal(t)
+	local := test.RandPeerIDFatal(t)
 	localID := ConvertPeerID(local)
 
 	i := rand.Intn(len(peers))
@@ -49,13 +49,13 @@ func TestBucket(t *testing.T) {
 }
 
 func TestTableCallbacks(t *testing.T) {
-	local := tu.RandPeerIDFatal(t)
+	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
 
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 100; i++ {
-		peers[i] = tu.RandPeerIDFatal(t)
+		peers[i] = test.RandPeerIDFatal(t)
 	}
 
 	pset := make(map[peer.ID]struct{})
@@ -95,13 +95,13 @@ func TestTableCallbacks(t *testing.T) {
 
 // Right now, this just makes sure that it doesnt hang or crash
 func TestTableUpdate(t *testing.T) {
-	local := tu.RandPeerIDFatal(t)
+	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
 
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 100; i++ {
-		peers[i] = tu.RandPeerIDFatal(t)
+		peers[i] = test.RandPeerIDFatal(t)
 	}
 
 	// Testing Update
@@ -110,7 +110,7 @@ func TestTableUpdate(t *testing.T) {
 	}
 
 	for i := 0; i < 100; i++ {
-		id := ConvertPeerID(tu.RandPeerIDFatal(t))
+		id := ConvertPeerID(test.RandPeerIDFatal(t))
 		ret := rt.NearestPeers(id, 5)
 		if len(ret) == 0 {
 			t.Fatal("Failed to find node near ID.")
@@ -119,13 +119,13 @@ func TestTableUpdate(t *testing.T) {
 }
 
 func TestTableFind(t *testing.T) {
-	local := tu.RandPeerIDFatal(t)
+	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
 
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 5; i++ {
-		peers[i] = tu.RandPeerIDFatal(t)
+		peers[i] = test.RandPeerIDFatal(t)
 		rt.Update(peers[i])
 	}
 
@@ -137,14 +137,14 @@ func TestTableFind(t *testing.T) {
 }
 
 func TestTableEldestPreferred(t *testing.T) {
-	local := tu.RandPeerIDFatal(t)
+	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
 
 	// generate size + 1 peers to saturate a bucket
 	peers := make([]peer.ID, 15)
 	for i := 0; i < 15; {
-		if p := tu.RandPeerIDFatal(t); CommonPrefixLen(ConvertPeerID(local), ConvertPeerID(p)) == 0 {
+		if p := test.RandPeerIDFatal(t); CommonPrefixLen(ConvertPeerID(local), ConvertPeerID(p)) == 0 {
 			peers[i] = p
 			i++
 		}
@@ -166,13 +166,13 @@ func TestTableEldestPreferred(t *testing.T) {
 }
 
 func TestTableFindMultiple(t *testing.T) {
-	local := tu.RandPeerIDFatal(t)
+	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m)
 
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 18; i++ {
-		peers[i] = tu.RandPeerIDFatal(t)
+		peers[i] = test.RandPeerIDFatal(t)
 		rt.Update(peers[i])
 	}
 
@@ -192,7 +192,7 @@ func TestTableMultithreaded(t *testing.T) {
 	tab := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m)
 	var peers []peer.ID
 	for i := 0; i < 500; i++ {
-		peers = append(peers, tu.RandPeerIDFatal(t))
+		peers = append(peers, test.RandPeerIDFatal(t))
 	}
 
 	done := make(chan struct{})
@@ -232,7 +232,7 @@ func BenchmarkUpdates(b *testing.B) {
 
 	var peers []peer.ID
 	for i := 0; i < b.N; i++ {
-		peers = append(peers, tu.RandPeerIDFatal(b))
+		peers = append(peers, test.RandPeerIDFatal(b))
 	}
 
 	b.StartTimer()
@@ -249,7 +249,7 @@ func BenchmarkFinds(b *testing.B) {
 
 	var peers []peer.ID
 	for i := 0; i < b.N; i++ {
-		peers = append(peers, tu.RandPeerIDFatal(b))
+		peers = append(peers, test.RandPeerIDFatal(b))
 		tab.Update(peers[i])
 	}
 
