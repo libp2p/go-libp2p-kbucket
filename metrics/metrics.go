@@ -55,7 +55,7 @@ var (
 )
 
 // LocalContext returns `ctx` tagged with the local dht `id` for metrics reporting.
-func  LocalContext(ctx context.Context, id []byte) context.Context {
+func LocalContext(ctx context.Context, id []byte) context.Context {
 	pretty := base58.Encode(id)
 	ctx, _ = tag.New(ctx, tag.Upsert(keyLocalId, pretty))
 	return ctx
@@ -76,7 +76,7 @@ func RecordBucketsNonEmpty(ctx context.Context, n int) {
 func recordWithBucketIndex(ctx context.Context, bucketIndex int, ms ...stats.Measurement) {
 	_ = stats.RecordWithTags(ctx,
 		[]tag.Mutator{tag.Upsert(keyBucketIndex, string(bucketIndex))},
-		ms...
+		ms...,
 	)
 }
 
@@ -91,7 +91,7 @@ func RecordBucketUtilization(ctx context.Context, bucketIndex int, n int) {
 func RecordPeerAdded(ctx context.Context, bucketIndex int, measuredLatency time.Duration) {
 	recordWithBucketIndex(ctx, bucketIndex,
 		KBucketPeersAdded.M(1),
-		KBucketPeerLatency.M(float64(measuredLatency / time.Millisecond)))
+		KBucketPeerLatency.M(float64(measuredLatency/time.Millisecond)))
 }
 
 // RecordPeerRejectedHighLatency records that a peer was rejected from the bucket with
@@ -161,4 +161,3 @@ var DefaultViews = map[string]*view.View{
 		Aggregation: view.Count(),
 	},
 }
-
