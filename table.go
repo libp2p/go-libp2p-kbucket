@@ -71,8 +71,8 @@ func (rt *RoutingTable) UpdateCtx(ctx context.Context, p peer.ID) (evicted peer.
 		bucketID = len(rt.Buckets) - 1
 	}
 
-	ctx = metrics.BucketContext(ctx, rt.local, bucketID)
 	bucket := rt.Buckets[bucketID]
+	ctx = metrics.BucketContext(ctx, rt.local, bucketID)
 	metrics.RecordBucketUtilization(ctx, bucket.Len())
 
 	if bucket.Has(p) {
@@ -108,8 +108,8 @@ func (rt *RoutingTable) UpdateCtx(ctx context.Context, p peer.ID) (evicted peer.
 		if bucketID >= len(rt.Buckets) {
 			bucketID = len(rt.Buckets) - 1
 		}
-		ctx = metrics.BucketContext(ctx, rt.local, bucketID)
 		bucket = rt.Buckets[bucketID]
+		ctx = metrics.BucketContext(ctx, rt.local, bucketID)
 		metrics.RecordBucketUtilization(ctx, bucket.Len())
 
 		if bucket.Len() >= rt.bucketsize {
