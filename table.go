@@ -22,7 +22,6 @@ var ErrPeerRejectedNoCapacity = errors.New("peer rejected; insufficient capacity
 
 // RoutingTable defines the routing table.
 type RoutingTable struct {
-
 	// ID of the local peer
 	local ID
 
@@ -155,7 +154,9 @@ func (rt *RoutingTable) RemoveCtx(ctx context.Context, p peer.ID) {
 
 	bucket := rt.Buckets[bucketID]
 	if bucket.Remove(p) {
+		ctx = metrics.BucketContext(ctx, rt.local, bucketID)
 		metrics.RecordPeerRemoved(ctx, bucketID)
+		metrics.RecordBucketUtilization(ctx, bucket.Len())
 		rt.PeerRemoved(p)
 	}
 }
