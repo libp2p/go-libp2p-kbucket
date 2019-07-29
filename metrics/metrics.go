@@ -85,7 +85,6 @@ var (
 	}
 )
 
-
 // LocalContext returns `ctx` tagged with the local dht `id` for metrics reporting.
 func LocalContext(ctx context.Context, id []byte) context.Context {
 	pretty := base58.Encode(id)
@@ -141,4 +140,3 @@ func RecordPeerRefreshed(ctx context.Context) {
 func RecordPeerRemoved(ctx context.Context, bucketIndex int) {
 	stats.Record(ctx, KBucketPeersRemoved.M(1))
 }
-
