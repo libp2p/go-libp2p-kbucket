@@ -62,7 +62,6 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 // UpdateCtx adds or moves the given peer to the front of its respective bucket, while recording
 // metrics about bucket capacities and peer additions and removals.
 func (rt *RoutingTable) UpdateCtx(ctx context.Context, p peer.ID) (evicted peer.ID, err error) {
-	ctx = metrics.LocalContext(ctx, rt.local)
 	peerID := ConvertPeerID(p)
 	cpl := CommonPrefixLen(peerID, rt.local)
 
@@ -73,7 +72,7 @@ func (rt *RoutingTable) UpdateCtx(ctx context.Context, p peer.ID) (evicted peer.
 		bucketID = len(rt.Buckets) - 1
 	}
 
-	ctx = metrics.BucketContext(ctx, bucketID)
+	ctx = metrics.BucketContext(ctx, rt.local, bucketID)
 	bucket := rt.Buckets[bucketID]
 	metrics.RecordBucketUtilization(ctx, bucket.Len())
 
@@ -110,7 +109,7 @@ func (rt *RoutingTable) UpdateCtx(ctx context.Context, p peer.ID) (evicted peer.
 		if bucketID >= len(rt.Buckets) {
 			bucketID = len(rt.Buckets) - 1
 		}
-		ctx = metrics.BucketContext(ctx, bucketID)
+		ctx = metrics.BucketContext(ctx, rt.local, bucketID)
 		bucket = rt.Buckets[bucketID]
 		metrics.RecordBucketUtilization(ctx, bucket.Len())
 

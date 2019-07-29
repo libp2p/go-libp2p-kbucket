@@ -85,17 +85,13 @@ var (
 	}
 )
 
-// LocalContext returns `ctx` tagged with the local dht `id` for metrics reporting.
-func LocalContext(ctx context.Context, id []byte) context.Context {
-	pretty := base58.Encode(id)
-	ctx, _ = tag.New(ctx, tag.Upsert(keyLocalId, pretty))
-	return ctx
-}
-
-// BucketContext returns `ctx` tagged with the current `bucketIndex`, and it
-// should be used for recording all metrics that correspond to a specific bucket.
-func BucketContext(ctx context.Context, bucketIndex int) context.Context {
-	ctx, _ = tag.New(ctx, tag.Upsert(keyBucketIndex, string(bucketIndex)))
+// BucketContext returns `ctx` tagged with the local DHT id `localId` and the current `bucketIndex`.
+// It should be used for recording all metrics that correspond to a specific bucket.
+func BucketContext(ctx context.Context, localID []byte, bucketIndex int) context.Context {
+	pretty := base58.Encode(localID)
+	ctx, _ = tag.New(ctx,
+		tag.Upsert(keyLocalId, pretty),
+		tag.Upsert(keyBucketIndex, string(bucketIndex)))
 	return ctx
 }
 
