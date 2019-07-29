@@ -59,9 +59,9 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 	return rt
 }
 
-// UpdateAndRecordMetrics adds or moves the given peer to the front of its respective bucket, while recording
+// UpdateCtx adds or moves the given peer to the front of its respective bucket, while recording
 // metrics about bucket capacities and peer additions and removals.
-func (rt *RoutingTable) UpdateAndRecordMetrics(ctx context.Context, p peer.ID) (evicted peer.ID, err error) {
+func (rt *RoutingTable) UpdateCtx(ctx context.Context, p peer.ID) (evicted peer.ID, err error) {
 	ctx = metrics.LocalContext(ctx, rt.local)
 	peerID := ConvertPeerID(p)
 	cpl := CommonPrefixLen(peerID, rt.local)
@@ -73,29 +73,16 @@ func (rt *RoutingTable) UpdateAndRecordMetrics(ctx context.Context, p peer.ID) (
 		bucketID = len(rt.Buckets) - 1
 	}
 
-	var full = 0
-	var nonEmpty = 0
-	for i, buck := range rt.Buckets {
-		n := buck.Len()
-		metrics.RecordBucketUtilization(ctx, i, n)
-		if n == 0 {
-			continue
-		}
-		nonEmpty += 1
-		if n >= rt.bucketsize {
-			full += 1
-		}
-	}
-	metrics.RecordBucketsNonEmpty(ctx, nonEmpty)
-	metrics.RecordBucketsFull(ctx, full)
-
+	ctx = metrics.BucketContext(ctx, bucketID)
 	bucket := rt.Buckets[bucketID]
+	metrics.RecordBucketUtilization(ctx, bucket.Len())
+
 	if bucket.Has(p) {
 		// If the peer is already in the table, move it to the front.
 		// This signifies that it it "more active" and the less active nodes
 		// Will as a result tend towards the back of the list
 		bucket.MoveToFront(p)
-		metrics.RecordPeerRefreshed(ctx, bucketID)
+		metrics.RecordPeerRefreshed(ctx)
 		return "", nil
 	}
 
@@ -110,7 +97,7 @@ func (rt *RoutingTable) UpdateAndRecordMetrics(ctx context.Context, p peer.ID) (
 	// We have enough space in the bucket (whether spawned or grouped).
 	if bucket.Len() < rt.bucketsize {
 		bucket.PushFront(p)
-		metrics.RecordPeerAdded(ctx, bucketID, peerLatency)
+		metrics.RecordPeerAdded(ctx, peerLatency)
 		rt.PeerAdded(p)
 		return "", nil
 	}
@@ -123,36 +110,39 @@ func (rt *RoutingTable) UpdateAndRecordMetrics(ctx context.Context, p peer.ID) (
 		if bucketID >= len(rt.Buckets) {
 			bucketID = len(rt.Buckets) - 1
 		}
+		ctx = metrics.BucketContext(ctx, bucketID)
 		bucket = rt.Buckets[bucketID]
+		metrics.RecordBucketUtilization(ctx, bucket.Len())
+
 		if bucket.Len() >= rt.bucketsize {
 			// if after all the unfolding, we're unable to find room for this peer, scrap it.
-			metrics.RecordPeerRejectedNoCapacity(ctx, bucketID)
+			metrics.RecordPeerRejectedNoCapacity(ctx)
 			return "", ErrPeerRejectedNoCapacity
 		}
 		bucket.PushFront(p)
-		metrics.RecordPeerAdded(ctx, bucketID, peerLatency)
+		metrics.RecordPeerAdded(ctx, peerLatency)
 		rt.PeerAdded(p)
 		return "", nil
 	}
 
-	metrics.RecordPeerRejectedNoCapacity(ctx, bucketID)
+	metrics.RecordPeerRejectedNoCapacity(ctx)
 	return "", ErrPeerRejectedNoCapacity
 }
 
 // Update adds or moves the given peer to the front of its respective bucket
 func (rt *RoutingTable) Update(p peer.ID) (evicted peer.ID, err error) {
-	return rt.UpdateAndRecordMetrics(context.Background(), p)
+	return rt.UpdateCtx(context.Background(), p)
 }
 
 // Remove deletes a peer from the routing table. This is to be used
 // when we are sure a node has disconnected completely.
 func (rt *RoutingTable) Remove(p peer.ID) {
-	rt.RemoveAndRecordMetrics(context.Background(), p)
+	rt.RemoveCtx(context.Background(), p)
 }
 
-// RemoveAndRecordMetrics deletes a peer from the routing table, updating metrics on removal.
+// RemoveCtx deletes a peer from the routing table, updating metrics on removal.
 // This is to be used when we are sure a node has disconnected completely.
-func (rt *RoutingTable) RemoveAndRecordMetrics(ctx context.Context, p peer.ID) {
+func (rt *RoutingTable) RemoveCtx(ctx context.Context, p peer.ID) {
 	peerID := ConvertPeerID(p)
 	cpl := CommonPrefixLen(peerID, rt.local)
 
