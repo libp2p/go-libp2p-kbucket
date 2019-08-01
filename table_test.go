@@ -81,6 +81,12 @@ func TestGenRandPeerID(t *testing.T) {
 		}
 	}
 
+	// test error case
+	peerID, err := rt.GenRandPeerID(-1)
+	if err != ErrGenRandPeerIDFailed || len(peerID) != 0 {
+		t.Fatalf("should have got err ErrGenRandPeerIDFailed for bucketID -1")
+	}
+
 }
 
 func TestTableCallbacks(t *testing.T) {

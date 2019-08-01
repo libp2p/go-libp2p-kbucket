@@ -79,7 +79,7 @@ func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
 	}
 
 	// should give up after a fixed number of attempts so we don't take up too much time/cpu
-	for i := 0; i < 200; i++ {
+	for i := 0; i < 1000; i++ {
 		peerID, err := randPeerID()
 		if err != nil {
 			log.Debugf("failed to generate random peerID in bucket %d, error is %+v", bucketID, err)
