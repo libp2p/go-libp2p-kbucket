@@ -24,7 +24,6 @@ var ErrGenRandPeerIDFailed = errors.New("failed to generate random peerID in buc
 
 // RoutingTable defines the routing table.
 type RoutingTable struct {
-
 	// ID of the local peer
 	local ID
 
@@ -59,6 +58,12 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 	}
 
 	return rt
+}
+
+func (rt *RoutingTable) GetAllBuckets() []*Bucket {
+	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
+	return rt.Buckets
 }
 
 func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {

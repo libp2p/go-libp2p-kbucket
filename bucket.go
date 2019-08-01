@@ -24,7 +24,7 @@ func newBucket() *Bucket {
 	return b
 }
 
-func (b *Bucket) GetLastQueriedAt() time.Time {
+func (b *Bucket) LastQueriedAt() time.Time {
 	b.lastQueriedAtLk.RLock()
 	defer b.lastQueriedAtLk.RUnlock()
 
