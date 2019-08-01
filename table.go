@@ -4,11 +4,14 @@ package kbucket
 import (
 	"errors"
 	"fmt"
+	"io"
+	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
+	mh "github.com/multiformats/go-multihash"
 
 	logging "github.com/ipfs/go-log"
 )
@@ -17,6 +20,7 @@ var log = logging.Logger("table")
 
 var ErrPeerRejectedHighLatency = errors.New("peer rejected; latency too high")
 var ErrPeerRejectedNoCapacity = errors.New("peer rejected; insufficient capacity")
+var ErrGenRandPeerIDFailed = errors.New("failed to generate random peerID in bucket: exhausted attempts")
 
 // RoutingTable defines the routing table.
 type RoutingTable struct {
@@ -55,6 +59,42 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 	}
 
 	return rt
+}
+
+func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
+	rt.tabLock.RLock()
+	bucketLen := len(rt.Buckets)
+	rt.tabLock.RUnlock()
+
+	var targetCpl int
+	if bucketID >= bucketLen-1 {
+		targetCpl = bucketLen
+	} else {
+		targetCpl = bucketID
+	}
+
+	// should give up after a fixed number of attempts so we don't take up too much time/cpu
+	for i := 0; i < 200; i++ {
+		peerID, err := randPeerID()
+		if err != nil {
+			log.Debugf("failed to generate random peerID in bucket %d, error is %+v", bucketID, err)
+			continue
+		}
+		if CommonPrefixLen(ConvertPeerID(peerID), rt.local) == targetCpl {
+			return peerID, err
+		}
+	}
+	return "", ErrGenRandPeerIDFailed
+}
+
+func randPeerID() (peer.ID, error) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	buf := make([]byte, 16)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return "", err
+	}
+	h, _ := mh.Sum(buf, mh.SHA2_256, -1)
+	return peer.ID(h), nil
 }
 
 // Update adds or moves the given peer to the front of its respective bucket

@@ -48,6 +48,41 @@ func TestBucket(t *testing.T) {
 	}
 }
 
+func TestGenRandPeerID(t *testing.T) {
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m)
+
+	// create 3 buckets
+	for i := 0; i < 5; i++ {
+		for {
+			if p := test.RandPeerIDFatal(t); CommonPrefixLen(ConvertPeerID(local), ConvertPeerID(p)) == i {
+				rt.Update(p)
+				break
+			}
+		}
+	}
+
+	for i := 0; i < 5; i++ {
+		peerID, err := rt.GenRandPeerID(i)
+		if err != nil || len(peerID) == 0 {
+			t.Fatalf("error %+v & peerID %s for bucket %d", err, peerID, i)
+		}
+
+		var expectedCpl int
+		if i < len(rt.Buckets)-1 {
+			expectedCpl = i
+		} else {
+			expectedCpl = len(rt.Buckets)
+		}
+
+		if CommonPrefixLen(ConvertPeerID(peerID), rt.local) != expectedCpl {
+			t.Fatalf("cpl should be %d for bucket %d, generated peerID is %s", expectedCpl, i, peerID)
+		}
+	}
+
+}
+
 func TestTableCallbacks(t *testing.T) {
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()

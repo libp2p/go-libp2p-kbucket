@@ -3,6 +3,7 @@ package kbucket
 import (
 	"container/list"
 	"sync"
+	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 )
@@ -11,12 +12,30 @@ import (
 type Bucket struct {
 	lk   sync.RWMutex
 	list *list.List
+
+	lastQueriedAtLk sync.RWMutex
+	lastQueriedAt   time.Time
 }
 
 func newBucket() *Bucket {
 	b := new(Bucket)
 	b.list = list.New()
+	b.lastQueriedAt = time.Now()
 	return b
+}
+
+func (b *Bucket) GetLastQueriedAt() time.Time {
+	b.lastQueriedAtLk.RLock()
+	defer b.lastQueriedAtLk.RUnlock()
+
+	return b.lastQueriedAt
+}
+
+func (b *Bucket) ResetLastQueriedAt(newTime time.Time) {
+	b.lastQueriedAtLk.Lock()
+	defer b.lastQueriedAtLk.Unlock()
+
+	b.lastQueriedAt = newTime
 }
 
 func (b *Bucket) Peers() []peer.ID {
