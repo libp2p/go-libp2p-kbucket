@@ -108,3 +108,5 @@ func (b *Bucket) Split(cpl int, target ID) *Bucket {
 	}
 	return newbuck
 }
+
+//go:generate go run ./generate
