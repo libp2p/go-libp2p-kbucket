@@ -49,12 +49,13 @@ func TestBucket(t *testing.T) {
 }
 
 func TestGenRandPeerID(t *testing.T) {
+	nBuckets := 16
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m)
 
-	// create 3 buckets
-	for i := 0; i < 5; i++ {
+	// create nBuckets
+	for i := 0; i < nBuckets; i++ {
 		for {
 			if p := test.RandPeerIDFatal(t); CommonPrefixLen(ConvertPeerID(local), ConvertPeerID(p)) == i {
 				rt.Update(p)
@@ -63,30 +64,31 @@ func TestGenRandPeerID(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < 5; i++ {
-		peerID, err := rt.GenRandPeerID(i)
+	for bucketID := 0; bucketID < nBuckets; bucketID++ {
+		peerID, err := rt.GenRandPeerID(bucketID)
 		if err != nil || len(peerID) == 0 {
-			t.Fatalf("error %+v & peerID %s for bucket %d", err, peerID, i)
+			t.Fatalf("error %+v & peerID %s for bucket %d", err, peerID, bucketID)
 		}
 
-		var expectedCpl int
-		if i < len(rt.Buckets)-1 {
-			expectedCpl = i
+		// except for the last bucket, CPL should be Exactly bucketID
+		if bucketID < len(rt.Buckets)-1 {
+			if CommonPrefixLen(ConvertPeerID(peerID), rt.local) != bucketID {
+				t.Fatalf("cpl should be %d for bucket %d but got %d, generated peerID is %s", bucketID, bucketID,
+					CommonPrefixLen(ConvertPeerID(peerID), rt.local), peerID)
+			}
 		} else {
-			expectedCpl = len(rt.Buckets)
-		}
-
-		if CommonPrefixLen(ConvertPeerID(peerID), rt.local) != expectedCpl {
-			t.Fatalf("cpl should be %d for bucket %d, generated peerID is %s", expectedCpl, i, peerID)
+			// for the last bucket, CPL should be Atleast the length of the bucket
+			if CommonPrefixLen(ConvertPeerID(peerID), rt.local) < len(rt.Buckets) {
+				t.Fatalf("cpl should be ATLEAST %d for bucket %d but got %d, generated peerID is %s", len(rt.Buckets), bucketID,
+					CommonPrefixLen(ConvertPeerID(peerID), rt.local), peerID)
+			}
 		}
 	}
 
-	// test error case
-	peerID, err := rt.GenRandPeerID(-1)
-	if err != ErrGenRandPeerIDFailed || len(peerID) != 0 {
-		t.Fatalf("should have got err ErrGenRandPeerIDFailed for bucketID -1")
+	_, err := rt.GenRandPeerID(-1)
+	if err == nil {
+		t.Fatalf("should get erorr for bucketID=-1")
 	}
-
 }
 
 func TestTableCallbacks(t *testing.T) {

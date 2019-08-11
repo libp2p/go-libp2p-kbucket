@@ -8,7 +8,7 @@ import (
 	ks "github.com/libp2p/go-libp2p-kbucket/keyspace"
 
 	u "github.com/ipfs/go-ipfs-util"
-	sha256 "github.com/minio/sha256-simd"
+	"github.com/minio/sha256-simd"
 )
 
 // Returned if a routing table query returns no results. This is NOT expected
@@ -33,6 +33,22 @@ func (id ID) less(other ID) bool {
 
 func xor(a, b ID) ID {
 	return ID(u.XOR(a, b))
+}
+
+func setBit(n byte, pos uint) byte {
+	n |= (1 << pos)
+	return n
+}
+
+func clearBit(n byte, pos uint) byte {
+	mask := byte(^(1 << pos))
+	n &= mask
+	return n
+}
+
+func isSet(n byte, pos uint) bool {
+	val := n & (1 << pos)
+	return (val > 0)
 }
 
 func CommonPrefixLen(a, b ID) int {

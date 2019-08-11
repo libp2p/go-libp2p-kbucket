@@ -2,9 +2,9 @@
 package kbucket
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"math/rand"
 	"sync"
 	"time"
@@ -20,7 +20,6 @@ var log = logging.Logger("table")
 
 var ErrPeerRejectedHighLatency = errors.New("peer rejected; latency too high")
 var ErrPeerRejectedNoCapacity = errors.New("peer rejected; insufficient capacity")
-var ErrGenRandPeerIDFailed = errors.New("failed to generate random peerID in bucket: exhausted attempts")
 
 // RoutingTable defines the routing table.
 type RoutingTable struct {
@@ -60,13 +59,19 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 	return rt
 }
 
+// GetAllBuckets is safe to call as rt.Buckets is append-only
+// caller SHOULD NOT modify the returned slice
 func (rt *RoutingTable) GetAllBuckets() []*Bucket {
 	rt.tabLock.RLock()
 	defer rt.tabLock.RUnlock()
 	return rt.Buckets
 }
 
+// GenRandPeerID generates a random peerID in bucket=bucketID
 func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
+	if bucketID < 0 {
+		return "", errors.New("bucketID must be non-negative")
+	}
 	rt.tabLock.RLock()
 	bucketLen := len(rt.Buckets)
 	rt.tabLock.RUnlock()
@@ -78,28 +83,54 @@ func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
 		targetCpl = bucketID
 	}
 
-	// should give up after a fixed number of attempts so we don't take up too much time/cpu
-	for i := 0; i < 1000; i++ {
-		peerID, err := randPeerID()
-		if err != nil {
-			log.Debugf("failed to generate random peerID in bucket %d, error is %+v", bucketID, err)
-			continue
-		}
-		if CommonPrefixLen(ConvertPeerID(peerID), rt.local) == targetCpl {
-			return peerID, err
-		}
-	}
-	return "", ErrGenRandPeerIDFailed
-}
-
-func randPeerID() (peer.ID, error) {
+	// generate random 16 bits
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	buf := make([]byte, 16)
-	if _, err := io.ReadFull(r, buf); err != nil {
+	buf := make([]byte, 2)
+	_, err := r.Read(buf)
+	if err != nil {
 		return "", err
 	}
-	h, _ := mh.Sum(buf, mh.SHA2_256, -1)
-	return peer.ID(h), nil
+
+	// replace the first targetCPL bits with those from the hashed local peer ID & toggle the (targetCpl+1)th bit
+	// so that exactly targetCpl bits match
+	numBytes := targetCpl / 8 // number of bytes we need to replace
+	numBits := targetCpl % 8  // number of bits we need to replace after numBytes have been replaced
+
+	// replace the bytes
+	byteIndex := 0
+	for ; byteIndex < numBytes; byteIndex++ {
+		buf[byteIndex] = rt.local[byteIndex]
+	}
+
+	// replace the bits
+	if byteIndex < len(buf) {
+		dstByte := buf[byteIndex]
+		srcByte := rt.local[byteIndex]
+		j := uint(7)
+		for k := 1; k <= numBits; k++ {
+			if isSet(srcByte, j) {
+				dstByte = setBit(dstByte, j)
+			} else {
+				dstByte = clearBit(dstByte, j)
+			}
+			j--
+		}
+
+		// toggle the next bit
+		if isSet(srcByte, j) {
+			dstByte = clearBit(dstByte, j)
+		} else {
+			dstByte = setBit(dstByte, j)
+		}
+		buf[byteIndex] = dstByte
+	}
+
+	// get the seed using buf & use it as the hash digest for a SHA2-256 Multihash to get the desired peer ID
+	prefix := binary.BigEndian.Uint16(buf)
+	key := keyPrefixMap[prefix]
+	h := [34]byte{mh.SHA2_256, 32}
+	binary.BigEndian.PutUint64(h[2:], key)
+	return peer.ID(h[:]), err
 }
 
 // Update adds or moves the given peer to the front of its respective bucket
