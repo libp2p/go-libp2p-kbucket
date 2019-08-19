@@ -133,6 +133,22 @@ func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
 	return peer.ID(h[:]), err
 }
 
+// Returns the bucket for a given peer
+// should NOT modify the peer list on the returned bucket
+func (rt *RoutingTable) BucketForPeer(p peer.ID) *Bucket {
+	peerID := ConvertPeerID(p)
+	cpl := CommonPrefixLen(peerID, rt.local)
+
+	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
+	bucketID := cpl
+	if bucketID >= len(rt.Buckets) {
+		bucketID = len(rt.Buckets) - 1
+	}
+
+	return rt.Buckets[bucketID]
+}
+
 // Update adds or moves the given peer to the front of its respective bucket
 func (rt *RoutingTable) Update(p peer.ID) (evicted peer.ID, err error) {
 	peerID := ConvertPeerID(p)

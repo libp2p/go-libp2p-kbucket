@@ -64,6 +64,16 @@ func TestGenRandPeerID(t *testing.T) {
 		}
 	}
 
+	// test bucket for peer
+	peers := rt.ListPeers()
+	for _, p := range peers {
+		b := rt.BucketForPeer(p)
+		if !b.Has(p) {
+			t.Fatalf("bucket should have peers %s", p.String())
+		}
+	}
+
+	// test generate rand peer ID
 	for bucketID := 0; bucketID < nBuckets; bucketID++ {
 		peerID, err := rt.GenRandPeerID(bucketID)
 		if err != nil || len(peerID) == 0 {
@@ -83,6 +93,7 @@ func TestGenRandPeerID(t *testing.T) {
 					CommonPrefixLen(ConvertPeerID(peerID), rt.local), peerID)
 			}
 		}
+
 	}
 
 	_, err := rt.GenRandPeerID(-1)
