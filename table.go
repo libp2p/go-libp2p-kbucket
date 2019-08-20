@@ -78,7 +78,7 @@ func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
 
 	var targetCpl int
 	if bucketID >= bucketLen-1 {
-		targetCpl = bucketLen
+		targetCpl = bucketLen - 1
 	} else {
 		targetCpl = bucketID
 	}
