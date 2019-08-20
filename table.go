@@ -77,10 +77,15 @@ func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
 	rt.tabLock.RUnlock()
 
 	var targetCpl int
-	if bucketID >= bucketLen-1 {
+	if bucketID > (bucketLen - 1) {
 		targetCpl = bucketLen - 1
 	} else {
 		targetCpl = bucketID
+	}
+
+	// We can only handle 16 bit prefixes.
+	if targetCpl > 16 {
+		targetCpl = 16
 	}
 
 	// generate random 16 bits
