@@ -35,22 +35,6 @@ func xor(a, b ID) ID {
 	return ID(u.XOR(a, b))
 }
 
-func setBit(n byte, pos uint) byte {
-	n |= (1 << pos)
-	return n
-}
-
-func clearBit(n byte, pos uint) byte {
-	mask := byte(^(1 << pos))
-	n &= mask
-	return n
-}
-
-func isSet(n byte, pos uint) bool {
-	val := n & (1 << pos)
-	return (val > 0)
-}
-
 func CommonPrefixLen(a, b ID) int {
 	return ks.ZeroPrefixLen(u.XOR(a, b))
 }

@@ -76,11 +76,11 @@ func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
 	bucketLen := len(rt.Buckets)
 	rt.tabLock.RUnlock()
 
-	var targetCpl int
+	var targetCpl uint
 	if bucketID > (bucketLen - 1) {
-		targetCpl = bucketLen - 1
+		targetCpl = uint(bucketLen) - 1
 	} else {
-		targetCpl = bucketID
+		targetCpl = uint(bucketID)
 	}
 
 	// We can only handle 16 bit prefixes.
@@ -88,54 +88,20 @@ func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
 		targetCpl = 16
 	}
 
-	// generate random 16 bits
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	buf := make([]byte, 2)
-	_, err := r.Read(buf)
-	if err != nil {
-		return "", err
-	}
+	// Extract the local prefix and a random prefix.
+	localPrefix := binary.BigEndian.Uint16(rt.local)
+	randPrefix := uint16(rand.Uint32())
 
-	// replace the first targetCPL bits with those from the hashed local peer ID & toggle the (targetCpl+1)th bit
-	// so that exactly targetCpl bits match
-	numBytes := targetCpl / 8 // number of bytes we need to replace
-	numBits := targetCpl % 8  // number of bits we need to replace after numBytes have been replaced
+	// Combine the local prefix and the random bits at the correct offset
+	// such that the first `bucketID` bits match the local ID.
+	mask := (^uint16(0)) << targetCpl
+	targetPrefix := (localPrefix & mask) | (randPrefix & ^mask)
 
-	// replace the bytes
-	byteIndex := 0
-	for ; byteIndex < numBytes; byteIndex++ {
-		buf[byteIndex] = rt.local[byteIndex]
-	}
-
-	// replace the bits
-	if byteIndex < len(buf) {
-		dstByte := buf[byteIndex]
-		srcByte := rt.local[byteIndex]
-		j := uint(7)
-		for k := 1; k <= numBits; k++ {
-			if isSet(srcByte, j) {
-				dstByte = setBit(dstByte, j)
-			} else {
-				dstByte = clearBit(dstByte, j)
-			}
-			j--
-		}
-
-		// toggle the next bit
-		if isSet(srcByte, j) {
-			dstByte = clearBit(dstByte, j)
-		} else {
-			dstByte = setBit(dstByte, j)
-		}
-		buf[byteIndex] = dstByte
-	}
-
-	// get the seed using buf & use it as the hash digest for a SHA2-256 Multihash to get the desired peer ID
-	prefix := binary.BigEndian.Uint16(buf)
-	key := keyPrefixMap[prefix]
-	h := [34]byte{mh.SHA2_256, 32}
-	binary.BigEndian.PutUint64(h[2:], key)
-	return peer.ID(h[:]), err
+	// Convert to a known peer ID.
+	key := keyPrefixMap[targetPrefix]
+	id := [34]byte{mh.SHA2_256, 32}
+	binary.BigEndian.PutUint64(id[2:], key)
+	return peer.ID(id[:]), nil
 }
 
 // Returns the bucket for a given peer
