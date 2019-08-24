@@ -70,7 +70,7 @@ func (rt *RoutingTable) GetAllBuckets() []*Bucket {
 // GenRandPeerID generates a random peerID in bucket=bucketID
 func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
 	if bucketID < 0 {
-		return "", errors.New("bucketID must be non-negative")
+		panic(errors.New(fmt.Sprintf("bucketID %d is not non-negative", bucketID)))
 	}
 	rt.tabLock.RLock()
 	bucketLen := len(rt.Buckets)
@@ -83,32 +83,39 @@ func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
 		targetCpl = uint(bucketID)
 	}
 
-	// We can only handle 16 bit prefixes.
+	// We can only handle upto 16 bit prefixes
 	if targetCpl > 16 {
 		targetCpl = 16
 	}
 
-	// Extract the local prefix and a random prefix.
+	var targetPrefix uint16
 	localPrefix := binary.BigEndian.Uint16(rt.local)
-	randPrefix := uint16(rand.Uint32())
+	if targetCpl < 16 {
+		// For host with ID `L`, an ID `K` belongs to a bucket with ID `B` ONLY IF CommonPrefixLen(L,K) is EXACTLY B.
+		// Hence, to achieve a targetPrefix `T`, we must toggle the (T+1)th bit in L & then copy (T+1) bits from L
+		// to our randomly generated prefix.
+		toggledLocalPrefix := localPrefix ^ (uint16(0x8000) >> targetCpl)
+		randPrefix := uint16(rand.Uint32())
 
-	// Combine the local prefix and the random bits at the correct offset
-	// such that the first `bucketID` bits match the local ID.
-	mask := (^uint16(0)) << targetCpl
-	targetPrefix := (localPrefix & mask) | (randPrefix & ^mask)
+		// Combine the toggled local prefix and the random bits at the correct offset
+		// such that ONLY the first `targetCpl` bits match the local ID.
+		mask := (^uint16(0)) << (16 - (targetCpl + 1))
+		targetPrefix = (toggledLocalPrefix & mask) | (randPrefix & ^mask)
+	} else {
+		targetPrefix = localPrefix
+	}
 
 	// Convert to a known peer ID.
 	key := keyPrefixMap[targetPrefix]
 	id := [34]byte{mh.SHA2_256, 32}
-	binary.BigEndian.PutUint64(id[2:], key)
+	binary.BigEndian.PutUint32(id[2:], key)
 	return peer.ID(id[:]), nil
 }
 
-// Returns the bucket for a given peer
+// Returns the bucket for a given ID
 // should NOT modify the peer list on the returned bucket
-func (rt *RoutingTable) BucketForPeer(p peer.ID) *Bucket {
-	peerID := ConvertPeerID(p)
-	cpl := CommonPrefixLen(peerID, rt.local)
+func (rt *RoutingTable) BucketForID(id ID) *Bucket {
+	cpl := CommonPrefixLen(id, rt.local)
 
 	rt.tabLock.RLock()
 	defer rt.tabLock.RUnlock()

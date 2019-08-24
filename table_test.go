@@ -49,7 +49,7 @@ func TestBucket(t *testing.T) {
 }
 
 func TestGenRandPeerID(t *testing.T) {
-	nBuckets := 16
+	nBuckets := 21
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m)
@@ -67,7 +67,7 @@ func TestGenRandPeerID(t *testing.T) {
 	// test bucket for peer
 	peers := rt.ListPeers()
 	for _, p := range peers {
-		b := rt.BucketForPeer(p)
+		b := rt.BucketForID(ConvertPeerID(p))
 		if !b.Has(p) {
 			t.Fatalf("bucket should have peers %s", p.String())
 		}
@@ -80,25 +80,20 @@ func TestGenRandPeerID(t *testing.T) {
 			t.Fatalf("error %+v & peerID %s for bucket %d", err, peerID, bucketID)
 		}
 
-		// except for the last bucket, CPL should be Exactly bucketID
-		if bucketID < len(rt.Buckets)-1 {
+		// for bucketID upto maxPrefixLen of 16, CPL should be Exactly bucketID
+		if bucketID < 16 {
 			if CommonPrefixLen(ConvertPeerID(peerID), rt.local) != bucketID {
 				t.Fatalf("cpl should be %d for bucket %d but got %d, generated peerID is %s", bucketID, bucketID,
 					CommonPrefixLen(ConvertPeerID(peerID), rt.local), peerID)
 			}
 		} else {
-			// for the last bucket, CPL should be Atleast the length of the bucket
-			if CommonPrefixLen(ConvertPeerID(peerID), rt.local) < len(rt.Buckets) {
-				t.Fatalf("cpl should be ATLEAST %d for bucket %d but got %d, generated peerID is %s", len(rt.Buckets), bucketID,
+			// from bucketID 16 onwards, CPL should be ATLEAST 16
+			if CommonPrefixLen(ConvertPeerID(peerID), rt.local) < 16 {
+				t.Fatalf("cpl should be ATLEAST 16 for bucket %d but got %d, generated peerID is %s", bucketID,
 					CommonPrefixLen(ConvertPeerID(peerID), rt.local), peerID)
 			}
 		}
 
-	}
-
-	_, err := rt.GenRandPeerID(-1)
-	if err == nil {
-		t.Fatalf("should get erorr for bucketID=-1")
 	}
 }
 

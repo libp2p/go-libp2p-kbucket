@@ -1,3 +1,5 @@
+//go:generate go run ./generate
+
 package kbucket
 
 import (
@@ -13,29 +15,29 @@ type Bucket struct {
 	lk   sync.RWMutex
 	list *list.List
 
-	lastQueriedAtLk sync.RWMutex
-	lastQueriedAt   time.Time
+	lastRefreshedAtLk sync.RWMutex
+	lastRefreshedAt   time.Time // the last time we looked up a key in the bucket
 }
 
 func newBucket() *Bucket {
 	b := new(Bucket)
 	b.list = list.New()
-	b.lastQueriedAt = time.Now()
+	b.lastRefreshedAt = time.Now()
 	return b
 }
 
-func (b *Bucket) LastQueriedAt() time.Time {
-	b.lastQueriedAtLk.RLock()
-	defer b.lastQueriedAtLk.RUnlock()
+func (b *Bucket) RefreshedAt() time.Time {
+	b.lastRefreshedAtLk.RLock()
+	defer b.lastRefreshedAtLk.RUnlock()
 
-	return b.lastQueriedAt
+	return b.lastRefreshedAt
 }
 
-func (b *Bucket) ResetLastQueriedAt(newTime time.Time) {
-	b.lastQueriedAtLk.Lock()
-	defer b.lastQueriedAtLk.Unlock()
+func (b *Bucket) ResetRefreshedAt(newTime time.Time) {
+	b.lastRefreshedAtLk.Lock()
+	defer b.lastRefreshedAtLk.Unlock()
 
-	b.lastQueriedAt = newTime
+	b.lastRefreshedAt = newTime
 }
 
 func (b *Bucket) Peers() []peer.ID {
@@ -127,5 +129,3 @@ func (b *Bucket) Split(cpl int, target ID) *Bucket {
 	}
 	return newbuck
 }
-
-//go:generate go run ./generate
