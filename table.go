@@ -68,9 +68,9 @@ func (rt *RoutingTable) GetAllBuckets() []*Bucket {
 }
 
 // GenRandPeerID generates a random peerID in bucket=bucketID
-func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
+func (rt *RoutingTable) GenRandPeerID(bucketID int) peer.ID {
 	if bucketID < 0 {
-		panic(errors.New(fmt.Sprintf("bucketID %d is not non-negative", bucketID)))
+		panic(fmt.Sprintf("bucketID %d is not non-negative", bucketID))
 	}
 	rt.tabLock.RLock()
 	bucketLen := len(rt.Buckets)
@@ -109,7 +109,7 @@ func (rt *RoutingTable) GenRandPeerID(bucketID int) (peer.ID, error) {
 	key := keyPrefixMap[targetPrefix]
 	id := [34]byte{mh.SHA2_256, 32}
 	binary.BigEndian.PutUint32(id[2:], key)
-	return peer.ID(id[:]), nil
+	return peer.ID(id[:])
 }
 
 // Returns the bucket for a given ID

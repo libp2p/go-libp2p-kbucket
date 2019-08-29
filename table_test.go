@@ -75,10 +75,7 @@ func TestGenRandPeerID(t *testing.T) {
 
 	// test generate rand peer ID
 	for bucketID := 0; bucketID < nBuckets; bucketID++ {
-		peerID, err := rt.GenRandPeerID(bucketID)
-		if err != nil || len(peerID) == 0 {
-			t.Fatalf("error %+v & peerID %s for bucket %d", err, peerID, bucketID)
-		}
+		peerID := rt.GenRandPeerID(bucketID)
 
 		// for bucketID upto maxPrefixLen of 16, CPL should be Exactly bucketID
 		if bucketID < 16 {
