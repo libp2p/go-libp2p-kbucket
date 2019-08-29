@@ -2,13 +2,16 @@
 package kbucket
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
+	mh "github.com/multiformats/go-multihash"
 
 	logging "github.com/ipfs/go-log"
 )
@@ -20,7 +23,6 @@ var ErrPeerRejectedNoCapacity = errors.New("peer rejected; insufficient capacity
 
 // RoutingTable defines the routing table.
 type RoutingTable struct {
-
 	// ID of the local peer
 	local ID
 
@@ -55,6 +57,74 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 	}
 
 	return rt
+}
+
+// GetAllBuckets is safe to call as rt.Buckets is append-only
+// caller SHOULD NOT modify the returned slice
+func (rt *RoutingTable) GetAllBuckets() []*Bucket {
+	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
+	return rt.Buckets
+}
+
+// GenRandPeerID generates a random peerID in bucket=bucketID
+func (rt *RoutingTable) GenRandPeerID(bucketID int) peer.ID {
+	if bucketID < 0 {
+		panic(fmt.Sprintf("bucketID %d is not non-negative", bucketID))
+	}
+	rt.tabLock.RLock()
+	bucketLen := len(rt.Buckets)
+	rt.tabLock.RUnlock()
+
+	var targetCpl uint
+	if bucketID > (bucketLen - 1) {
+		targetCpl = uint(bucketLen) - 1
+	} else {
+		targetCpl = uint(bucketID)
+	}
+
+	// We can only handle upto 16 bit prefixes
+	if targetCpl > 16 {
+		targetCpl = 16
+	}
+
+	var targetPrefix uint16
+	localPrefix := binary.BigEndian.Uint16(rt.local)
+	if targetCpl < 16 {
+		// For host with ID `L`, an ID `K` belongs to a bucket with ID `B` ONLY IF CommonPrefixLen(L,K) is EXACTLY B.
+		// Hence, to achieve a targetPrefix `T`, we must toggle the (T+1)th bit in L & then copy (T+1) bits from L
+		// to our randomly generated prefix.
+		toggledLocalPrefix := localPrefix ^ (uint16(0x8000) >> targetCpl)
+		randPrefix := uint16(rand.Uint32())
+
+		// Combine the toggled local prefix and the random bits at the correct offset
+		// such that ONLY the first `targetCpl` bits match the local ID.
+		mask := (^uint16(0)) << (16 - (targetCpl + 1))
+		targetPrefix = (toggledLocalPrefix & mask) | (randPrefix & ^mask)
+	} else {
+		targetPrefix = localPrefix
+	}
+
+	// Convert to a known peer ID.
+	key := keyPrefixMap[targetPrefix]
+	id := [34]byte{mh.SHA2_256, 32}
+	binary.BigEndian.PutUint32(id[2:], key)
+	return peer.ID(id[:])
+}
+
+// Returns the bucket for a given ID
+// should NOT modify the peer list on the returned bucket
+func (rt *RoutingTable) BucketForID(id ID) *Bucket {
+	cpl := CommonPrefixLen(id, rt.local)
+
+	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
+	bucketID := cpl
+	if bucketID >= len(rt.Buckets) {
+		bucketID = len(rt.Buckets) - 1
+	}
+
+	return rt.Buckets[bucketID]
 }
 
 // Update adds or moves the given peer to the front of its respective bucket

@@ -8,7 +8,7 @@ import (
 	ks "github.com/libp2p/go-libp2p-kbucket/keyspace"
 
 	u "github.com/ipfs/go-ipfs-util"
-	sha256 "github.com/minio/sha256-simd"
+	"github.com/minio/sha256-simd"
 )
 
 // Returned if a routing table query returns no results. This is NOT expected
