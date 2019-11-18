@@ -21,6 +21,15 @@ var log = logging.Logger("table")
 var ErrPeerRejectedHighLatency = errors.New("peer rejected; latency too high")
 var ErrPeerRejectedNoCapacity = errors.New("peer rejected; insufficient capacity")
 
+// MaxCplForRefresh is the maximum cpl we support for refresh.
+// This limit exists because we can only generate 'MaxCplForRefresh' bit prefixes for now.
+var MaxCplForRefresh uint = 15
+
+type CplRefresh struct {
+	Cpl           uint
+	LastRefreshAt time.Time
+}
+
 // RoutingTable defines the routing table.
 type RoutingTable struct {
 	// ID of the local peer
@@ -39,6 +48,9 @@ type RoutingTable struct {
 	Buckets    []*Bucket
 	bucketsize int
 
+	cplRefreshLk   sync.RWMutex
+	cplRefreshedAt map[uint]time.Time
+
 	// notification functions
 	PeerRemoved func(peer.ID)
 	PeerAdded   func(peer.ID)
@@ -47,84 +59,71 @@ type RoutingTable struct {
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
 func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics) *RoutingTable {
 	rt := &RoutingTable{
-		Buckets:     []*Bucket{newBucket()},
-		bucketsize:  bucketsize,
-		local:       localID,
-		maxLatency:  latency,
-		metrics:     m,
-		PeerRemoved: func(peer.ID) {},
-		PeerAdded:   func(peer.ID) {},
+		Buckets:        []*Bucket{newBucket()},
+		bucketsize:     bucketsize,
+		local:          localID,
+		maxLatency:     latency,
+		metrics:        m,
+		cplRefreshedAt: make(map[uint]time.Time),
+		PeerRemoved:    func(peer.ID) {},
+		PeerAdded:      func(peer.ID) {},
 	}
 
 	return rt
 }
 
-// GetAllBuckets is safe to call as rt.Buckets is append-only
-// caller SHOULD NOT modify the returned slice
-func (rt *RoutingTable) GetAllBuckets() []*Bucket {
-	rt.tabLock.RLock()
-	defer rt.tabLock.RUnlock()
-	return rt.Buckets
+// GetTrackedCplsForRefresh returns the Cpl's we are tracking for refresh.
+// Caller is free to modify the returned slice as it is a defensive copy.
+func (rt *RoutingTable) GetTrackedCplsForRefresh() []*CplRefresh {
+	rt.cplRefreshLk.RLock()
+	defer rt.cplRefreshLk.RUnlock()
+
+	var cpls []*CplRefresh
+
+	for c, t := range rt.cplRefreshedAt {
+		cpls = append(cpls, &CplRefresh{c, t})
+	}
+
+	return cpls
 }
 
-// GenRandPeerID generates a random peerID in bucket=bucketID
-func (rt *RoutingTable) GenRandPeerID(bucketID int) peer.ID {
-	if bucketID < 0 {
-		panic(fmt.Sprintf("bucketID %d is not non-negative", bucketID))
-	}
-	rt.tabLock.RLock()
-	bucketLen := len(rt.Buckets)
-	rt.tabLock.RUnlock()
-
-	var targetCpl uint
-	if bucketID > (bucketLen - 1) {
-		targetCpl = uint(bucketLen) - 1
-	} else {
-		targetCpl = uint(bucketID)
+// GenRandPeerID generates a random peerID for a given Cpl
+func (rt *RoutingTable) GenRandPeerID(targetCpl uint) (peer.ID, error) {
+	if targetCpl > MaxCplForRefresh {
+		return "", fmt.Errorf("cannot generate peer ID for Cpl greater than %d", MaxCplForRefresh)
 	}
 
-	// We can only handle upto 16 bit prefixes
-	if targetCpl > 16 {
-		targetCpl = 16
-	}
-
-	var targetPrefix uint16
 	localPrefix := binary.BigEndian.Uint16(rt.local)
-	if targetCpl < 16 {
-		// For host with ID `L`, an ID `K` belongs to a bucket with ID `B` ONLY IF CommonPrefixLen(L,K) is EXACTLY B.
-		// Hence, to achieve a targetPrefix `T`, we must toggle the (T+1)th bit in L & then copy (T+1) bits from L
-		// to our randomly generated prefix.
-		toggledLocalPrefix := localPrefix ^ (uint16(0x8000) >> targetCpl)
-		randPrefix := uint16(rand.Uint32())
 
-		// Combine the toggled local prefix and the random bits at the correct offset
-		// such that ONLY the first `targetCpl` bits match the local ID.
-		mask := (^uint16(0)) << (16 - (targetCpl + 1))
-		targetPrefix = (toggledLocalPrefix & mask) | (randPrefix & ^mask)
-	} else {
-		targetPrefix = localPrefix
-	}
+	// For host with ID `L`, an ID `K` belongs to a bucket with ID `B` ONLY IF CommonPrefixLen(L,K) is EXACTLY B.
+	// Hence, to achieve a targetPrefix `T`, we must toggle the (T+1)th bit in L & then copy (T+1) bits from L
+	// to our randomly generated prefix.
+	toggledLocalPrefix := localPrefix ^ (uint16(0x8000) >> targetCpl)
+	randPrefix := uint16(rand.Uint32())
+
+	// Combine the toggled local prefix and the random bits at the correct offset
+	// such that ONLY the first `targetCpl` bits match the local ID.
+	mask := (^uint16(0)) << (16 - (targetCpl + 1))
+	targetPrefix := (toggledLocalPrefix & mask) | (randPrefix & ^mask)
 
 	// Convert to a known peer ID.
 	key := keyPrefixMap[targetPrefix]
 	id := [34]byte{mh.SHA2_256, 32}
 	binary.BigEndian.PutUint32(id[2:], key)
-	return peer.ID(id[:])
+	return peer.ID(id[:]), nil
 }
 
-// Returns the bucket for a given ID
-// should NOT modify the peer list on the returned bucket
-func (rt *RoutingTable) BucketForID(id ID) *Bucket {
+// ResetCplRefreshedAtForID resets the refresh time for the Cpl of the given ID.
+func (rt *RoutingTable) ResetCplRefreshedAtForID(id ID, newTime time.Time) {
 	cpl := CommonPrefixLen(id, rt.local)
-
-	rt.tabLock.RLock()
-	defer rt.tabLock.RUnlock()
-	bucketID := cpl
-	if bucketID >= len(rt.Buckets) {
-		bucketID = len(rt.Buckets) - 1
+	if uint(cpl) > MaxCplForRefresh {
+		return
 	}
 
-	return rt.Buckets[bucketID]
+	rt.cplRefreshLk.Lock()
+	defer rt.cplRefreshLk.Unlock()
+
+	rt.cplRefreshedAt[uint(cpl)] = newTime
 }
 
 // Update adds or moves the given peer to the front of its respective bucket
