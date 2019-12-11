@@ -8,3 +8,5 @@ require (
 	github.com/minio/sha256-simd v0.0.0-20190131020904-2d45a736cd16
 	github.com/multiformats/go-multihash v0.0.1
 )
+
+go 1.13

@@ -229,6 +229,26 @@ func TestTableFindMultiple(t *testing.T) {
 	}
 }
 
+func TestTableFindMultipleBuckets(t *testing.T) {
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt := NewRoutingTable(5, ConvertPeerID(local), time.Hour, m)
+
+	peers := make([]peer.ID, 100)
+	for i := 0; i < 100; i++ {
+		peers[i] = test.RandPeerIDFatal(t)
+		rt.Update(peers[i])
+	}
+
+	t.Logf("Searching for peer: '%s'", peers[2])
+	// should be able to find at least 30
+	// ~31 (logtwo(100) * 5)
+	found := rt.NearestPeers(ConvertPeerID(peers[2]), 20)
+	if len(found) != 20 {
+		t.Fatalf("asked for 15 peers, got %d", len(found))
+	}
+}
+
 // Looks for race conditions in table operations. For a more 'certain'
 // test, increase the loop counter from 1000 to a much higher number
 // and set GOMAXPROCS above 1
