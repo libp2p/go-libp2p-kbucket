@@ -12,6 +12,8 @@ import (
 
 // Test basic features of the bucket struct
 func TestBucket(t *testing.T) {
+	t.Parallel()
+
 	b := newBucket()
 
 	peers := make([]peer.ID, 100)
@@ -49,6 +51,8 @@ func TestBucket(t *testing.T) {
 }
 
 func TestGenRandPeerID(t *testing.T) {
+	t.Parallel()
+
 	nBuckets := 21
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
@@ -95,6 +99,8 @@ func TestGenRandPeerID(t *testing.T) {
 }
 
 func TestTableCallbacks(t *testing.T) {
+	t.Parallel()
+
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
@@ -141,6 +147,8 @@ func TestTableCallbacks(t *testing.T) {
 
 // Right now, this just makes sure that it doesnt hang or crash
 func TestTableUpdate(t *testing.T) {
+	t.Parallel()
+
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
@@ -165,6 +173,8 @@ func TestTableUpdate(t *testing.T) {
 }
 
 func TestTableFind(t *testing.T) {
+	t.Parallel()
+
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
@@ -183,6 +193,8 @@ func TestTableFind(t *testing.T) {
 }
 
 func TestTableEldestPreferred(t *testing.T) {
+	t.Parallel()
+
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
@@ -212,6 +224,8 @@ func TestTableEldestPreferred(t *testing.T) {
 }
 
 func TestTableFindMultiple(t *testing.T) {
+	t.Parallel()
+
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m)
@@ -230,6 +244,8 @@ func TestTableFindMultiple(t *testing.T) {
 }
 
 func TestTableFindMultipleBuckets(t *testing.T) {
+	t.Parallel()
+
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(5, ConvertPeerID(local), time.Hour, m)
@@ -241,11 +257,18 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 	}
 
 	t.Logf("Searching for peer: '%s'", peers[2])
+
 	// should be able to find at least 30
 	// ~31 (logtwo(100) * 5)
 	found := rt.NearestPeers(ConvertPeerID(peers[2]), 20)
 	if len(found) != 20 {
-		t.Fatalf("asked for 15 peers, got %d", len(found))
+		t.Fatalf("asked for 20 peers, got %d", len(found))
+	}
+
+	// Ok, now let's try finding all of them.
+	found = rt.NearestPeers(ConvertPeerID(peers[2]), 100)
+	if len(found) != rt.Size() {
+		t.Fatalf("asked for %d peers, got %d", rt.Size(), len(found))
 	}
 }
 
@@ -253,6 +276,8 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 // test, increase the loop counter from 1000 to a much higher number
 // and set GOMAXPROCS above 1
 func TestTableMultithreaded(t *testing.T) {
+	t.Parallel()
+
 	local := peer.ID("localPeer")
 	m := pstore.NewMetrics()
 	tab := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m)
