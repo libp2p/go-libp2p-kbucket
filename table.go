@@ -238,32 +238,51 @@ func (rt *RoutingTable) NearestPeer(id ID) peer.ID {
 
 // NearestPeers returns a list of the 'count' closest peers to the given ID
 func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
+	// This is the number of bits _we_ share with the key. All peers in this
+	// bucket share cpl bits with us and will therefore share at least cpl+1
+	// bits with the given key. +1 because both the target and all peers in
+	// this bucket differ from us in the cpl bit.
 	cpl := CommonPrefixLen(id, rt.local)
 
 	// It's assumed that this also protects the buckets.
 	rt.tabLock.RLock()
 
-	// Get bucket at cpl index or last bucket
-	var bucket *Bucket
+	// Get bucket index or last bucket
 	if cpl >= len(rt.Buckets) {
 		cpl = len(rt.Buckets) - 1
 	}
-	bucket = rt.Buckets[cpl]
 
 	pds := peerDistanceSorter{
-		peers:  make([]peerDistance, 0, 3*rt.bucketsize),
+		peers:  make([]peerDistance, 0, count+rt.bucketsize),
 		target: id,
 	}
-	pds.appendPeersFromList(bucket.list)
-	if pds.Len() < count {
-		// In the case of an unusual split, one bucket may be short or empty.
-		// if this happens, search both surrounding buckets for nearby peers
-		if cpl > 0 {
-			pds.appendPeersFromList(rt.Buckets[cpl-1].list)
-		}
-		if cpl < len(rt.Buckets)-1 {
-			pds.appendPeersFromList(rt.Buckets[cpl+1].list)
-		}
+
+	// Add peers from the target bucket (cpl+1 shared bits).
+	pds.appendPeersFromList(rt.Buckets[cpl].list)
+
+	// If we're short, add peers from buckets to the right until we have
+	// enough. All buckets to the right share exactly cpl bits (as opposed
+	// to the cpl+1 bits shared by the peers in the cpl bucket).
+	//
+	// Unfortunately, to be completely correct, we can't just take from
+	// buckets until we have enough peers because peers because _all_ of
+	// these peers will be ~2**(256-cpl) from us.
+	//
+	// However, we're going to do that anyways as it's "good enough"
+
+	for i := cpl + 1; i < len(rt.Buckets) && pds.Len() < count; i++ {
+		pds.appendPeersFromList(rt.Buckets[i].list)
+	}
+
+	// If we're still short, add in buckets that share _fewer_ bits. We can
+	// do this bucket by bucket because each bucket will share 1 fewer bit
+	// than the last.
+	//
+	// * bucket cpl-1: cpl-2 shared bits.
+	// * bucket cpl-2: cpl-3 shared bits.
+	// ...
+	for i := cpl - 1; i >= 0 && pds.Len() < count; i-- {
+		pds.appendPeersFromList(rt.Buckets[i].list)
 	}
 	rt.tabLock.RUnlock()
 
