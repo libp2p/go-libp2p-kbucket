@@ -256,6 +256,8 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 		rt.Update(peers[i])
 	}
 
+	closest := SortClosestPeers(rt.ListPeers(), ConvertPeerID(peers[2]))
+
 	t.Logf("Searching for peer: '%s'", peers[2])
 
 	// should be able to find at least 30
@@ -264,11 +266,22 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 	if len(found) != 20 {
 		t.Fatalf("asked for 20 peers, got %d", len(found))
 	}
+	for i, p := range found {
+		if p != closest[i] {
+			t.Fatalf("unexpected peer %d", i)
+		}
+	}
 
 	// Ok, now let's try finding all of them.
 	found = rt.NearestPeers(ConvertPeerID(peers[2]), 100)
 	if len(found) != rt.Size() {
 		t.Fatalf("asked for %d peers, got %d", rt.Size(), len(found))
+	}
+
+	for i, p := range found {
+		if p != closest[i] {
+			t.Fatalf("unexpected peer %d", i)
+		}
 	}
 }
 
