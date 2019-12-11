@@ -260,20 +260,18 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 	// Add peers from the target bucket (cpl+1 shared bits).
 	pds.appendPeersFromList(rt.Buckets[cpl].list)
 
-	// If we're short, add peers from _all_ buckets to the right. These
-	// buckets all share exactly cpl bits (as opposed to the cpl+1 bits
-	// shared by the peers in the cpl bucket).
+	// If we're short, add peers from buckets to the right until we have
+	// enough. All buckets to the right share exactly cpl bits (as opposed
+	// to the cpl+1 bits shared by the peers in the cpl bucket).
 	//
 	// Unfortunately, to be completely correct, we can't just take from
 	// buckets until we have enough peers because peers because _all_ of
 	// these peers will be ~2**(256-cpl) from us.
 	//
-	// TODO: Should we just do this anyways? Technically, we might miss
-	// _slightly_ closer peers in later buckets.
-	if pds.Len() < count {
-		for i := cpl + 1; i < len(rt.Buckets); i++ {
-			pds.appendPeersFromList(rt.Buckets[i].list)
-		}
+	// However, we're going to do that anyways as it's "good enough"
+
+	for i := cpl + 1; i < len(rt.Buckets) && pds.Len() < count; i++ {
+		pds.appendPeersFromList(rt.Buckets[i].list)
 	}
 
 	// If we're still short, add in buckets that share _fewer_ bits. We can
@@ -283,7 +281,7 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 	// * bucket cpl-1: cpl-2 shared bits.
 	// * bucket cpl-2: cpl-3 shared bits.
 	// ...
-	for i := cpl - 1; i >= 0; i-- {
+	for i := cpl - 1; i >= 0 && pds.Len() < count; i-- {
 		pds.appendPeersFromList(rt.Buckets[i].list)
 	}
 	rt.tabLock.RUnlock()
