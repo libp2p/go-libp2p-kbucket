@@ -278,8 +278,8 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 	// do this bucket by bucket because each bucket will share 1 fewer bit
 	// than the last.
 	//
-	// * bucket cpl-1: cpl-2 shared bits.
-	// * bucket cpl-2: cpl-3 shared bits.
+	// * bucket cpl-1: cpl-1 shared bits.
+	// * bucket cpl-2: cpl-2 shared bits.
 	// ...
 	for i := cpl - 1; i >= 0 && pds.Len() < count; i-- {
 		pds.appendPeersFromList(rt.Buckets[i].list)
