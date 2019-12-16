@@ -8,6 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/test"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
+	"github.com/stretchr/testify/require"
 )
 
 // Test basic features of the bucket struct
@@ -53,48 +54,49 @@ func TestBucket(t *testing.T) {
 func TestGenRandPeerID(t *testing.T) {
 	t.Parallel()
 
-	nBuckets := 21
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m)
 
-	// create nBuckets
-	for i := 0; i < nBuckets; i++ {
-		for {
-			if p := test.RandPeerIDFatal(t); CommonPrefixLen(ConvertPeerID(local), ConvertPeerID(p)) == i {
-				rt.Update(p)
-				break
-			}
-		}
-	}
-
-	// test bucket for peer
-	peers := rt.ListPeers()
-	for _, p := range peers {
-		b := rt.BucketForID(ConvertPeerID(p))
-		if !b.Has(p) {
-			t.Fatalf("bucket should have peers %s", p.String())
-		}
-	}
+	// generate above maxCplForRefresh fails
+	p, err := rt.GenRandPeerID(maxCplForRefresh + 1)
+	require.Error(t, err)
+	require.Empty(t, p)
 
 	// test generate rand peer ID
-	for bucketID := 0; bucketID < nBuckets; bucketID++ {
-		peerID := rt.GenRandPeerID(bucketID)
+	for cpl := uint(0); cpl <= maxCplForRefresh; cpl++ {
+		peerID, err := rt.GenRandPeerID(cpl)
+		require.NoError(t, err)
 
-		// for bucketID upto maxPrefixLen of 16, CPL should be Exactly bucketID
-		if bucketID < 16 {
-			if CommonPrefixLen(ConvertPeerID(peerID), rt.local) != bucketID {
-				t.Fatalf("cpl should be %d for bucket %d but got %d, generated peerID is %s", bucketID, bucketID,
-					CommonPrefixLen(ConvertPeerID(peerID), rt.local), peerID)
-			}
-		} else {
-			// from bucketID 16 onwards, CPL should be ATLEAST 16
-			if CommonPrefixLen(ConvertPeerID(peerID), rt.local) < 16 {
-				t.Fatalf("cpl should be ATLEAST 16 for bucket %d but got %d, generated peerID is %s", bucketID,
-					CommonPrefixLen(ConvertPeerID(peerID), rt.local), peerID)
-			}
-		}
+		require.True(t, uint(CommonPrefixLen(ConvertPeerID(peerID), rt.local)) == cpl, "failed for cpl=%d", cpl)
+	}
+}
 
+func TestRefreshAndGetTrackedCpls(t *testing.T) {
+	t.Parallel()
+
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m)
+
+	// add cpl's for tracking
+	for cpl := uint(0); cpl < maxCplForRefresh; cpl++ {
+		peerID, err := rt.GenRandPeerID(cpl)
+		require.NoError(t, err)
+		rt.ResetCplRefreshedAtForID(ConvertPeerID(peerID), time.Now())
+	}
+
+	// fetch cpl's
+	trackedCpls := rt.GetTrackedCplsForRefresh()
+	require.Len(t, trackedCpls, int(maxCplForRefresh))
+	actualCpls := make(map[uint]struct{})
+	for i := 0; i < len(trackedCpls); i++ {
+		actualCpls[trackedCpls[i].Cpl] = struct{}{}
+	}
+
+	for i := uint(0); i < maxCplForRefresh; i++ {
+		_, ok := actualCpls[i]
+		require.True(t, ok, "tracked cpl's should have cpl %d", i)
 	}
 }
 
