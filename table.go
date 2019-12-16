@@ -80,12 +80,10 @@ func (rt *RoutingTable) GetTrackedCplsForRefresh() []CplRefresh {
 	rt.cplRefreshLk.RLock()
 	defer rt.cplRefreshLk.RUnlock()
 
-	cpls := make([]CplRefresh, len(rt.cplRefreshedAt))
+	cpls := make([]CplRefresh, 0, len(rt.cplRefreshedAt))
 
-	i := 0
 	for c, t := range rt.cplRefreshedAt {
-		cpls[i] = CplRefresh{c, t}
-		i++
+		cpls = append(cpls, CplRefresh{c, t})
 	}
 
 	return cpls
