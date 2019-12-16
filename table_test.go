@@ -58,13 +58,13 @@ func TestGenRandPeerID(t *testing.T) {
 	m := pstore.NewMetrics()
 	rt := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m)
 
-	// generate above MaxCplForRefresh fails
-	p, err := rt.GenRandPeerID(MaxCplForRefresh + 1)
+	// generate above maxCplForRefresh fails
+	p, err := rt.GenRandPeerID(maxCplForRefresh + 1)
 	require.Error(t, err)
 	require.Empty(t, p)
 
 	// test generate rand peer ID
-	for cpl := uint(0); cpl <= MaxCplForRefresh; cpl++ {
+	for cpl := uint(0); cpl <= maxCplForRefresh; cpl++ {
 		peerID, err := rt.GenRandPeerID(cpl)
 		require.NoError(t, err)
 
@@ -80,7 +80,7 @@ func TestRefreshAndGetTrackedCpls(t *testing.T) {
 	rt := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m)
 
 	// add cpl's for tracking
-	for cpl := uint(0); cpl < MaxCplForRefresh; cpl++ {
+	for cpl := uint(0); cpl < maxCplForRefresh; cpl++ {
 		peerID, err := rt.GenRandPeerID(cpl)
 		require.NoError(t, err)
 		rt.ResetCplRefreshedAtForID(ConvertPeerID(peerID), time.Now())
@@ -88,13 +88,13 @@ func TestRefreshAndGetTrackedCpls(t *testing.T) {
 
 	// fetch cpl's
 	trackedCpls := rt.GetTrackedCplsForRefresh()
-	require.Len(t, trackedCpls, int(MaxCplForRefresh))
+	require.Len(t, trackedCpls, int(maxCplForRefresh))
 	actualCpls := make(map[uint]struct{})
 	for i := 0; i < len(trackedCpls); i++ {
 		actualCpls[trackedCpls[i].Cpl] = struct{}{}
 	}
 
-	for i := uint(0); i < MaxCplForRefresh; i++ {
+	for i := uint(0); i < maxCplForRefresh; i++ {
 		_, ok := actualCpls[i]
 		require.True(t, ok, "tracked cpl's should have cpl %d", i)
 	}

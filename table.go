@@ -21,10 +21,12 @@ var log = logging.Logger("table")
 var ErrPeerRejectedHighLatency = errors.New("peer rejected; latency too high")
 var ErrPeerRejectedNoCapacity = errors.New("peer rejected; insufficient capacity")
 
-// MaxCplForRefresh is the maximum cpl we support for refresh.
-// This limit exists because we can only generate 'MaxCplForRefresh' bit prefixes for now.
-var MaxCplForRefresh uint = 15
+// maxCplForRefresh is the maximum cpl we support for refresh.
+// This limit exists because we can only generate 'maxCplForRefresh' bit prefixes for now.
+const maxCplForRefresh uint = 15
 
+// CplRefresh contains a CPL(common prefix length) with the host & the last time
+// we refreshed that cpl/searched for an ID which has that cpl with the host.
 type CplRefresh struct {
 	Cpl           uint
 	LastRefreshAt time.Time
@@ -74,14 +76,16 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 
 // GetTrackedCplsForRefresh returns the Cpl's we are tracking for refresh.
 // Caller is free to modify the returned slice as it is a defensive copy.
-func (rt *RoutingTable) GetTrackedCplsForRefresh() []*CplRefresh {
+func (rt *RoutingTable) GetTrackedCplsForRefresh() []CplRefresh {
 	rt.cplRefreshLk.RLock()
 	defer rt.cplRefreshLk.RUnlock()
 
-	var cpls []*CplRefresh
+	cpls := make([]CplRefresh, len(rt.cplRefreshedAt))
 
+	i := 0
 	for c, t := range rt.cplRefreshedAt {
-		cpls = append(cpls, &CplRefresh{c, t})
+		cpls[i] = CplRefresh{c, t}
+		i++
 	}
 
 	return cpls
@@ -89,8 +93,8 @@ func (rt *RoutingTable) GetTrackedCplsForRefresh() []*CplRefresh {
 
 // GenRandPeerID generates a random peerID for a given Cpl
 func (rt *RoutingTable) GenRandPeerID(targetCpl uint) (peer.ID, error) {
-	if targetCpl > MaxCplForRefresh {
-		return "", fmt.Errorf("cannot generate peer ID for Cpl greater than %d", MaxCplForRefresh)
+	if targetCpl > maxCplForRefresh {
+		return "", fmt.Errorf("cannot generate peer ID for Cpl greater than %d", maxCplForRefresh)
 	}
 
 	localPrefix := binary.BigEndian.Uint16(rt.local)
@@ -116,7 +120,7 @@ func (rt *RoutingTable) GenRandPeerID(targetCpl uint) (peer.ID, error) {
 // ResetCplRefreshedAtForID resets the refresh time for the Cpl of the given ID.
 func (rt *RoutingTable) ResetCplRefreshedAtForID(id ID, newTime time.Time) {
 	cpl := CommonPrefixLen(id, rt.local)
-	if uint(cpl) > MaxCplForRefresh {
+	if uint(cpl) > maxCplForRefresh {
 		return
 	}
 
