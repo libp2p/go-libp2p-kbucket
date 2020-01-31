@@ -5,8 +5,9 @@ require (
 	github.com/ipfs/go-log v0.0.1
 	github.com/libp2p/go-libp2p-core v0.3.0
 	github.com/libp2p/go-libp2p-peerstore v0.1.4
-	github.com/minio/sha256-simd v0.0.0-20190131020904-2d45a736cd16
+	github.com/minio/sha256-simd v0.1.1
 	github.com/multiformats/go-multihash v0.0.10
+	github.com/stretchr/testify v1.4.0
 )
 
 go 1.13
