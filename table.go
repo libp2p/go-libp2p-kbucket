@@ -2,6 +2,7 @@
 package kbucket
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -11,15 +12,22 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
-	mh "github.com/multiformats/go-multihash"
 
 	logging "github.com/ipfs/go-log"
+	mh "github.com/multiformats/go-multihash"
 )
 
 var log = logging.Logger("table")
 
 var ErrPeerRejectedHighLatency = errors.New("peer rejected; latency too high")
 var ErrPeerRejectedNoCapacity = errors.New("peer rejected; insufficient capacity")
+
+// PeerSelectionFnc is the signature of a function that selects zero or more peers from the given peers
+// based on some criteria.
+type PeerSelectionFnc func(peers []PeerInfo) []PeerInfo
+
+// PeerValidationFnc is the signature of a function that determines the validity a peer for Routing Table membership.
+type PeerValidationFnc func(ctx context.Context, p peer.ID) bool
 
 // maxCplForRefresh is the maximum cpl we support for refresh.
 // This limit exists because we can only generate 'maxCplForRefresh' bit prefixes for now.
@@ -34,6 +42,8 @@ type CplRefresh struct {
 
 // RoutingTable defines the routing table.
 type RoutingTable struct {
+	ctx context.Context
+
 	// ID of the local peer
 	local ID
 
@@ -47,31 +57,133 @@ type RoutingTable struct {
 	maxLatency time.Duration
 
 	// kBuckets define all the fingers to other nodes.
-	Buckets    []*Bucket
+	Buckets    []*bucket
 	bucketsize int
 
 	cplRefreshLk   sync.RWMutex
 	cplRefreshedAt map[uint]time.Time
 
+	// replacement candidates for a Cpl
+	cplReplacementCache *cplReplacementCache
+
 	// notification functions
 	PeerRemoved func(peer.ID)
 	PeerAdded   func(peer.ID)
+
+	// function to determine the validity of a peer for RT membership
+	PeerValidationFnc PeerValidationFnc
+
+	// timeout for a single call to the peer validation function
+	peerValidationTimeout time.Duration
+	// interval between two runs of the table cleanup routine
+	tableCleanupInterval time.Duration
+	// function to select peers that need to be validated
+	peersForValidationFnc PeerSelectionFnc
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
-func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics) *RoutingTable {
-	rt := &RoutingTable{
-		Buckets:        []*Bucket{newBucket()},
-		bucketsize:     bucketsize,
-		local:          localID,
-		maxLatency:     latency,
-		metrics:        m,
-		cplRefreshedAt: make(map[uint]time.Time),
-		PeerRemoved:    func(peer.ID) {},
-		PeerAdded:      func(peer.ID) {},
+// Passing a nil PeerValidationFnc disables periodic table cleanup.
+func NewRoutingTable(ctx context.Context, bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics,
+	peerValidationFnc PeerValidationFnc, options ...Option) (*RoutingTable, error) {
+
+	var cfg Options
+	if err := cfg.Apply(append([]Option{Defaults}, options...)...); err != nil {
+		return nil, err
 	}
 
-	return rt
+	rt := &RoutingTable{
+		ctx:        ctx,
+		Buckets:    []*bucket{newBucket()},
+		bucketsize: bucketsize,
+		local:      localID,
+
+		maxLatency: latency,
+		metrics:    m,
+
+		cplRefreshedAt: make(map[uint]time.Time),
+
+		PeerRemoved: func(peer.ID) {},
+		PeerAdded:   func(peer.ID) {},
+
+		PeerValidationFnc:     peerValidationFnc,
+		peersForValidationFnc: cfg.TableCleanup.PeersForValidationFnc,
+		peerValidationTimeout: cfg.TableCleanup.PeerValidationTimeout,
+		tableCleanupInterval:  cfg.TableCleanup.Interval,
+	}
+
+	rt.cplReplacementCache = newCplReplacementCache(rt.local, rt.bucketsize)
+
+	// schedule periodic RT cleanup
+	if peerValidationFnc != nil {
+		go rt.cleanup()
+	}
+
+	return rt, nil
+}
+
+func (rt *RoutingTable) cleanup() {
+	validatePeerF := func(p peer.ID) bool {
+		queryCtx, cancel := context.WithTimeout(rt.ctx, rt.peerValidationTimeout)
+		defer cancel()
+		return rt.PeerValidationFnc(queryCtx, p)
+	}
+
+	cleanupTickr := time.NewTicker(rt.tableCleanupInterval)
+	defer cleanupTickr.Stop()
+	for {
+		select {
+		case <-rt.ctx.Done():
+			return
+		case <-cleanupTickr.C:
+			ps := rt.peersToValidate()
+			for _, pinfo := range ps {
+				// continue if we are able to successfully validate the peer
+				// it will be marked alive in the RT when the DHT connection notification handler calls RT.HandlePeerAlive()
+				// TODO Should we revisit this ? It makes more sense for the RT to mark it as active here
+				if validatePeerF(pinfo.Id) {
+					log.Infof("successfully validated missing peer=%s", pinfo.Id)
+					continue
+				}
+
+				// peer does not seem to be alive, let's try candidates now
+				log.Infof("failed to validate missing peer=%s, will try candidates now...", pinfo.Id)
+				// evict missing peer
+				rt.HandlePeerDead(pinfo.Id)
+
+				// keep trying replacement candidates for the missing peer till we get a successful validation or
+				// we run out of candidates
+				cpl := uint(CommonPrefixLen(ConvertPeerID(pinfo.Id), rt.local))
+				c, notEmpty := rt.cplReplacementCache.pop(cpl)
+				for notEmpty {
+					if validatePeerF(c) {
+						log.Infof("successfully validated candidate=%s for missing peer=%s", c, pinfo.Id)
+						break
+					}
+					log.Infof("failed to validated candidate=%s", c)
+					// remove candidate
+					rt.HandlePeerDead(c)
+
+					c, notEmpty = rt.cplReplacementCache.pop(cpl)
+				}
+
+				if !notEmpty {
+					log.Infof("failed to replace missing peer=%s as all candidates were invalid", pinfo.Id)
+				}
+			}
+		}
+	}
+}
+
+// returns the peers that need to be validated.
+func (rt *RoutingTable) peersToValidate() []PeerInfo {
+	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
+
+	var peers []PeerInfo
+	for _, b := range rt.Buckets {
+		peers = append(peers, b.peers()...)
+	}
+	return rt.peersForValidationFnc(peers)
 }
 
 // GetTrackedCplsForRefresh returns the Cpl's we are tracking for refresh.
@@ -128,24 +240,41 @@ func (rt *RoutingTable) ResetCplRefreshedAtForID(id ID, newTime time.Time) {
 	rt.cplRefreshedAt[uint(cpl)] = newTime
 }
 
-// Update adds or moves the given peer to the front of its respective bucket
-func (rt *RoutingTable) Update(p peer.ID) (evicted peer.ID, err error) {
-	peerID := ConvertPeerID(p)
-	cpl := CommonPrefixLen(peerID, rt.local)
-
+// HandlePeerDisconnect should be called when the caller detects a disconnection with the peer.
+// This enables the Routing Table to mark the peer as missing.
+func (rt *RoutingTable) HandlePeerDisconnect(p peer.ID) {
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
-	bucketID := cpl
-	if bucketID >= len(rt.Buckets) {
-		bucketID = len(rt.Buckets) - 1
-	}
 
+	// mark the peer as missing
+	bucketId := rt.bucketIdForPeer(p)
+	b := rt.Buckets[bucketId]
+	if peer, has := b.getPeer(p); has {
+		peer.State = PeerStateMissing
+		b.replace(peer)
+	}
+}
+
+// HandlePeerAlive should be called when the caller detects that a peer is alive.
+// This could be a successful incoming/outgoing connection with the peer or even a successful message delivery to/from the peer.
+// This enables the RT to update it's internal state to mark the peer as active.
+func (rt *RoutingTable) HandlePeerAlive(p peer.ID) (evicted peer.ID, err error) {
+	rt.tabLock.Lock()
+	defer rt.tabLock.Unlock()
+
+	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.Buckets[bucketID]
-	if bucket.Has(p) {
+	if peer, has := bucket.getPeer(p); has {
+		// mark the peer as active if it was missing
+		if peer.State == PeerStateMissing {
+			peer.State = PeerStateActive
+			bucket.replace(peer)
+		}
+
 		// If the peer is already in the table, move it to the front.
 		// This signifies that it it "more active" and the less active nodes
 		// Will as a result tend towards the back of the list
-		bucket.MoveToFront(p)
+		bucket.moveToFront(p)
 		return "", nil
 	}
 
@@ -155,8 +284,8 @@ func (rt *RoutingTable) Update(p peer.ID) (evicted peer.ID, err error) {
 	}
 
 	// We have enough space in the bucket (whether spawned or grouped).
-	if bucket.Len() < rt.bucketsize {
-		bucket.PushFront(p)
+	if bucket.len() < rt.bucketsize {
+		bucket.pushFront(PeerInfo{p, PeerStateActive})
 		rt.PeerAdded(p)
 		return "", nil
 	}
@@ -165,39 +294,34 @@ func (rt *RoutingTable) Update(p peer.ID) (evicted peer.ID, err error) {
 		// if the bucket is too large and this is the last bucket (i.e. wildcard), unfold it.
 		rt.nextBucket()
 		// the structure of the table has changed, so let's recheck if the peer now has a dedicated bucket.
-		bucketID = cpl
-		if bucketID >= len(rt.Buckets) {
-			bucketID = len(rt.Buckets) - 1
-		}
+		bucketID = rt.bucketIdForPeer(p)
 		bucket = rt.Buckets[bucketID]
-		if bucket.Len() >= rt.bucketsize {
-			// if after all the unfolding, we're unable to find room for this peer, scrap it.
-			return "", ErrPeerRejectedNoCapacity
+
+		// push the peer only if the bucket isn't overflowing after slitting
+		if bucket.len() < rt.bucketsize {
+			bucket.pushFront(PeerInfo{p, PeerStateActive})
+			rt.PeerAdded(p)
+			return "", nil
 		}
-		bucket.PushFront(p)
-		rt.PeerAdded(p)
-		return "", nil
 	}
+	// try to push it as a candidate in the replacement cache
+	rt.cplReplacementCache.push(p)
 
 	return "", ErrPeerRejectedNoCapacity
 }
 
-// Remove deletes a peer from the routing table. This is to be used
-// when we are sure a node has disconnected completely.
-func (rt *RoutingTable) Remove(p peer.ID) {
-	peerID := ConvertPeerID(p)
-	cpl := CommonPrefixLen(peerID, rt.local)
+// HandlePeerDead should be called when the caller is sure that a peer is dead/not dialable.
+// It evicts the peer from the Routing Table and also removes it as a replacement candidate if it is one.
+func (rt *RoutingTable) HandlePeerDead(p peer.ID) {
+	// remove it as a candidate
+	rt.cplReplacementCache.remove(p)
 
+	// remove it from the RT
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
-
-	bucketID := cpl
-	if bucketID >= len(rt.Buckets) {
-		bucketID = len(rt.Buckets) - 1
-	}
-
+	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.Buckets[bucketID]
-	if bucket.Remove(p) {
+	if bucket.remove(p) {
 		rt.PeerRemoved(p)
 	}
 }
@@ -207,11 +331,11 @@ func (rt *RoutingTable) nextBucket() {
 	// _allegedly_ is used here to denote that *all* peers in the last bucket might feasibly belong to another bucket.
 	// This could happen if e.g. we've unfolded 4 buckets, and all peers in folded bucket 5 really belong in bucket 8.
 	bucket := rt.Buckets[len(rt.Buckets)-1]
-	newBucket := bucket.Split(len(rt.Buckets)-1, rt.local)
+	newBucket := bucket.split(len(rt.Buckets)-1, rt.local)
 	rt.Buckets = append(rt.Buckets, newBucket)
 
 	// The newly formed bucket still contains too many peers. We probably just unfolded a empty bucket.
-	if newBucket.Len() >= rt.bucketsize {
+	if newBucket.len() >= rt.bucketsize {
 		// Keep unfolding the table until the last bucket is not overflowing.
 		rt.nextBucket()
 	}
@@ -248,7 +372,7 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 	// It's assumed that this also protects the buckets.
 	rt.tabLock.RLock()
 
-	// Get bucket index or last bucket
+	// getPeer bucket index or last bucket
 	if cpl >= len(rt.Buckets) {
 		cpl = len(rt.Buckets) - 1
 	}
@@ -307,7 +431,7 @@ func (rt *RoutingTable) Size() int {
 	var tot int
 	rt.tabLock.RLock()
 	for _, buck := range rt.Buckets {
-		tot += buck.Len()
+		tot += buck.len()
 	}
 	rt.tabLock.RUnlock()
 	return tot
@@ -318,7 +442,7 @@ func (rt *RoutingTable) ListPeers() []peer.ID {
 	var peers []peer.ID
 	rt.tabLock.RLock()
 	for _, buck := range rt.Buckets {
-		peers = append(peers, buck.Peers()...)
+		peers = append(peers, buck.peerIds()...)
 	}
 	rt.tabLock.RUnlock()
 	return peers
@@ -340,4 +464,15 @@ func (rt *RoutingTable) Print() {
 		b.lk.RUnlock()
 	}
 	rt.tabLock.RUnlock()
+}
+
+// the caller is responsible for the locking
+func (rt *RoutingTable) bucketIdForPeer(p peer.ID) int {
+	peerID := ConvertPeerID(p)
+	cpl := CommonPrefixLen(peerID, rt.local)
+	bucketID := cpl
+	if bucketID >= len(rt.Buckets) {
+		bucketID = len(rt.Buckets) - 1
+	}
+	return bucketID
 }

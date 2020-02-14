@@ -36,7 +36,7 @@ func (pds *peerDistanceSorter) appendPeer(p peer.ID) {
 // Append the peer.ID values in the list to the sorter's slice. It may no longer be sorted.
 func (pds *peerDistanceSorter) appendPeersFromList(l *list.List) {
 	for e := l.Front(); e != nil; e = e.Next() {
-		pds.appendPeer(e.Value.(peer.ID))
+		pds.appendPeer(e.Value.(PeerInfo).Id)
 	}
 }
 
