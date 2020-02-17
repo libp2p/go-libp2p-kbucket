@@ -22,12 +22,12 @@ var log = logging.Logger("table")
 var ErrPeerRejectedHighLatency = errors.New("peer rejected; latency too high")
 var ErrPeerRejectedNoCapacity = errors.New("peer rejected; insufficient capacity")
 
-// PeerSelectionFnc is the signature of a function that selects zero or more peers from the given peers
+// PeerSelectionFunc is the signature of a function that selects zero or more peers from the given peers
 // based on some criteria.
-type PeerSelectionFnc func(peers []PeerInfo) []PeerInfo
+type PeerSelectionFunc func(peers []PeerInfo) []PeerInfo
 
-// PeerValidationFnc is the signature of a function that determines the validity a peer for Routing Table membership.
-type PeerValidationFnc func(ctx context.Context, p peer.ID) bool
+// PeerValidationFunc is the signature of a function that determines the validity a peer for Routing Table membership.
+type PeerValidationFunc func(ctx context.Context, p peer.ID) bool
 
 // maxCplForRefresh is the maximum cpl we support for refresh.
 // This limit exists because we can only generate 'maxCplForRefresh' bit prefixes for now.
@@ -57,7 +57,7 @@ type RoutingTable struct {
 	maxLatency time.Duration
 
 	// kBuckets define all the fingers to other nodes.
-	Buckets    []*bucket
+	buckets    []*bucket
 	bucketsize int
 
 	cplRefreshLk   sync.RWMutex
@@ -71,20 +71,20 @@ type RoutingTable struct {
 	PeerAdded   func(peer.ID)
 
 	// function to determine the validity of a peer for RT membership
-	PeerValidationFnc PeerValidationFnc
+	peerValidationFnc PeerValidationFunc
 
 	// timeout for a single call to the peer validation function
 	peerValidationTimeout time.Duration
 	// interval between two runs of the table cleanup routine
 	tableCleanupInterval time.Duration
 	// function to select peers that need to be validated
-	peersForValidationFnc PeerSelectionFnc
+	peersForValidationFnc PeerSelectionFunc
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
-// Passing a nil PeerValidationFnc disables periodic table cleanup.
+// Passing a nil PeerValidationFunc disables periodic table cleanup.
 func NewRoutingTable(ctx context.Context, bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics,
-	peerValidationFnc PeerValidationFnc, options ...Option) (*RoutingTable, error) {
+	options ...Option) (*RoutingTable, error) {
 
 	var cfg Options
 	if err := cfg.Apply(append([]Option{Defaults}, options...)...); err != nil {
@@ -93,7 +93,7 @@ func NewRoutingTable(ctx context.Context, bucketsize int, localID ID, latency ti
 
 	rt := &RoutingTable{
 		ctx:        ctx,
-		Buckets:    []*bucket{newBucket()},
+		buckets:    []*bucket{newBucket()},
 		bucketsize: bucketsize,
 		local:      localID,
 
@@ -105,7 +105,7 @@ func NewRoutingTable(ctx context.Context, bucketsize int, localID ID, latency ti
 		PeerRemoved: func(peer.ID) {},
 		PeerAdded:   func(peer.ID) {},
 
-		PeerValidationFnc:     peerValidationFnc,
+		peerValidationFnc:     cfg.TableCleanup.PeerValidationFnc,
 		peersForValidationFnc: cfg.TableCleanup.PeersForValidationFnc,
 		peerValidationTimeout: cfg.TableCleanup.PeerValidationTimeout,
 		tableCleanupInterval:  cfg.TableCleanup.Interval,
@@ -113,8 +113,8 @@ func NewRoutingTable(ctx context.Context, bucketsize int, localID ID, latency ti
 
 	rt.cplReplacementCache = newCplReplacementCache(rt.local, rt.bucketsize)
 
-	// schedule periodic RT cleanup
-	if peerValidationFnc != nil {
+	// schedule periodic RT cleanup if peer validation function has been passed
+	if rt.peerValidationFnc != nil {
 		go rt.cleanup()
 	}
 
@@ -125,7 +125,7 @@ func (rt *RoutingTable) cleanup() {
 	validatePeerF := func(p peer.ID) bool {
 		queryCtx, cancel := context.WithTimeout(rt.ctx, rt.peerValidationTimeout)
 		defer cancel()
-		return rt.PeerValidationFnc(queryCtx, p)
+		return rt.peerValidationFnc(queryCtx, p)
 	}
 
 	cleanupTickr := time.NewTicker(rt.tableCleanupInterval)
@@ -180,7 +180,7 @@ func (rt *RoutingTable) peersToValidate() []PeerInfo {
 	defer rt.tabLock.RUnlock()
 
 	var peers []PeerInfo
-	for _, b := range rt.Buckets {
+	for _, b := range rt.buckets {
 		peers = append(peers, b.peers()...)
 	}
 	return rt.peersForValidationFnc(peers)
@@ -246,12 +246,11 @@ func (rt *RoutingTable) HandlePeerDisconnect(p peer.ID) {
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
 
-	// mark the peer as missing
 	bucketId := rt.bucketIdForPeer(p)
-	b := rt.Buckets[bucketId]
-	if peer, has := b.getPeer(p); has {
+	// mark the peer as missing
+	b := rt.buckets[bucketId]
+	if peer := b.getPeer(p); peer != nil {
 		peer.State = PeerStateMissing
-		b.replace(peer)
 	}
 }
 
@@ -263,18 +262,11 @@ func (rt *RoutingTable) HandlePeerAlive(p peer.ID) (evicted peer.ID, err error) 
 	defer rt.tabLock.Unlock()
 
 	bucketID := rt.bucketIdForPeer(p)
-	bucket := rt.Buckets[bucketID]
-	if peer, has := bucket.getPeer(p); has {
-		// mark the peer as active if it was missing
-		if peer.State == PeerStateMissing {
-			peer.State = PeerStateActive
-			bucket.replace(peer)
-		}
+	bucket := rt.buckets[bucketID]
+	if peer := bucket.getPeer(p); peer != nil {
+		// mark the peer as active
+		peer.State = PeerStateActive
 
-		// If the peer is already in the table, move it to the front.
-		// This signifies that it it "more active" and the less active nodes
-		// Will as a result tend towards the back of the list
-		bucket.moveToFront(p)
 		return "", nil
 	}
 
@@ -285,21 +277,21 @@ func (rt *RoutingTable) HandlePeerAlive(p peer.ID) (evicted peer.ID, err error) 
 
 	// We have enough space in the bucket (whether spawned or grouped).
 	if bucket.len() < rt.bucketsize {
-		bucket.pushFront(PeerInfo{p, PeerStateActive})
+		bucket.pushFront(&PeerInfo{p, PeerStateActive})
 		rt.PeerAdded(p)
 		return "", nil
 	}
 
-	if bucketID == len(rt.Buckets)-1 {
+	if bucketID == len(rt.buckets)-1 {
 		// if the bucket is too large and this is the last bucket (i.e. wildcard), unfold it.
 		rt.nextBucket()
 		// the structure of the table has changed, so let's recheck if the peer now has a dedicated bucket.
 		bucketID = rt.bucketIdForPeer(p)
-		bucket = rt.Buckets[bucketID]
+		bucket = rt.buckets[bucketID]
 
 		// push the peer only if the bucket isn't overflowing after slitting
 		if bucket.len() < rt.bucketsize {
-			bucket.pushFront(PeerInfo{p, PeerStateActive})
+			bucket.pushFront(&PeerInfo{p, PeerStateActive})
 			rt.PeerAdded(p)
 			return "", nil
 		}
@@ -320,7 +312,7 @@ func (rt *RoutingTable) HandlePeerDead(p peer.ID) {
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
 	bucketID := rt.bucketIdForPeer(p)
-	bucket := rt.Buckets[bucketID]
+	bucket := rt.buckets[bucketID]
 	if bucket.remove(p) {
 		rt.PeerRemoved(p)
 	}
@@ -330,9 +322,9 @@ func (rt *RoutingTable) nextBucket() {
 	// This is the last bucket, which allegedly is a mixed bag containing peers not belonging in dedicated (unfolded) buckets.
 	// _allegedly_ is used here to denote that *all* peers in the last bucket might feasibly belong to another bucket.
 	// This could happen if e.g. we've unfolded 4 buckets, and all peers in folded bucket 5 really belong in bucket 8.
-	bucket := rt.Buckets[len(rt.Buckets)-1]
-	newBucket := bucket.split(len(rt.Buckets)-1, rt.local)
-	rt.Buckets = append(rt.Buckets, newBucket)
+	bucket := rt.buckets[len(rt.buckets)-1]
+	newBucket := bucket.split(len(rt.buckets)-1, rt.local)
+	rt.buckets = append(rt.buckets, newBucket)
 
 	// The newly formed bucket still contains too many peers. We probably just unfolded a empty bucket.
 	if newBucket.len() >= rt.bucketsize {
@@ -372,9 +364,9 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 	// It's assumed that this also protects the buckets.
 	rt.tabLock.RLock()
 
-	// getPeer bucket index or last bucket
-	if cpl >= len(rt.Buckets) {
-		cpl = len(rt.Buckets) - 1
+	// Get bucket index or last bucket
+	if cpl >= len(rt.buckets) {
+		cpl = len(rt.buckets) - 1
 	}
 
 	pds := peerDistanceSorter{
@@ -383,7 +375,7 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 	}
 
 	// Add peers from the target bucket (cpl+1 shared bits).
-	pds.appendPeersFromList(rt.Buckets[cpl].list)
+	pds.appendPeersFromList(rt.buckets[cpl].list)
 
 	// If we're short, add peers from buckets to the right until we have
 	// enough. All buckets to the right share exactly cpl bits (as opposed
@@ -395,8 +387,8 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 	//
 	// However, we're going to do that anyways as it's "good enough"
 
-	for i := cpl + 1; i < len(rt.Buckets) && pds.Len() < count; i++ {
-		pds.appendPeersFromList(rt.Buckets[i].list)
+	for i := cpl + 1; i < len(rt.buckets) && pds.Len() < count; i++ {
+		pds.appendPeersFromList(rt.buckets[i].list)
 	}
 
 	// If we're still short, add in buckets that share _fewer_ bits. We can
@@ -407,7 +399,7 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 	// * bucket cpl-2: cpl-2 shared bits.
 	// ...
 	for i := cpl - 1; i >= 0 && pds.Len() < count; i-- {
-		pds.appendPeersFromList(rt.Buckets[i].list)
+		pds.appendPeersFromList(rt.buckets[i].list)
 	}
 	rt.tabLock.RUnlock()
 
@@ -430,7 +422,7 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 func (rt *RoutingTable) Size() int {
 	var tot int
 	rt.tabLock.RLock()
-	for _, buck := range rt.Buckets {
+	for _, buck := range rt.buckets {
 		tot += buck.len()
 	}
 	rt.tabLock.RUnlock()
@@ -441,7 +433,7 @@ func (rt *RoutingTable) Size() int {
 func (rt *RoutingTable) ListPeers() []peer.ID {
 	var peers []peer.ID
 	rt.tabLock.RLock()
-	for _, buck := range rt.Buckets {
+	for _, buck := range rt.buckets {
 		peers = append(peers, buck.peerIds()...)
 	}
 	rt.tabLock.RUnlock()
@@ -453,7 +445,7 @@ func (rt *RoutingTable) Print() {
 	fmt.Printf("Routing Table, bs = %d, Max latency = %d\n", rt.bucketsize, rt.maxLatency)
 	rt.tabLock.RLock()
 
-	for i, b := range rt.Buckets {
+	for i, b := range rt.buckets {
 		fmt.Printf("\tbucket: %d\n", i)
 
 		b.lk.RLock()
@@ -471,8 +463,8 @@ func (rt *RoutingTable) bucketIdForPeer(p peer.ID) int {
 	peerID := ConvertPeerID(p)
 	cpl := CommonPrefixLen(peerID, rt.local)
 	bucketID := cpl
-	if bucketID >= len(rt.Buckets) {
-		bucketID = len(rt.Buckets) - 1
+	if bucketID >= len(rt.buckets) {
+		bucketID = len(rt.buckets) - 1
 	}
 	return bucketID
 }

@@ -4,8 +4,6 @@ import (
 	"sync"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-
-	"github.com/wangjia184/sortedset"
 )
 
 // TODO Should ideally use a Circular queue for this
@@ -15,14 +13,14 @@ type cplReplacementCache struct {
 	maxQueueSize int
 
 	sync.Mutex
-	candidates map[uint]*sortedset.SortedSet // candidates for a Cpl
+	candidates map[uint][]peer.ID // candidates for a Cpl
 }
 
 func newCplReplacementCache(localPeer ID, maxQueueSize int) *cplReplacementCache {
 	return &cplReplacementCache{
 		localPeer:    localPeer,
 		maxQueueSize: maxQueueSize,
-		candidates:   make(map[uint]*sortedset.SortedSet),
+		candidates:   make(map[uint][]peer.ID),
 	}
 }
 
@@ -33,25 +31,21 @@ func (c *cplReplacementCache) push(p peer.ID) bool {
 	c.Lock()
 	defer c.Unlock()
 
-	// create queue if not created
 	cpl := uint(CommonPrefixLen(c.localPeer, ConvertPeerID(p)))
-	if c.candidates[cpl] == nil {
-		c.candidates[cpl] = sortedset.New()
-	}
-
-	q := c.candidates[cpl]
 
 	// queue is full
-	if (q.GetCount()) >= c.maxQueueSize {
+	if len(c.candidates[cpl]) >= c.maxQueueSize {
 		return false
 	}
 	// queue already has the peer
-	if q.GetByKey(string(p)) != nil {
-		return false
+	for _, pr := range c.candidates[cpl] {
+		if pr == p {
+			return false
+		}
 	}
 
 	// push
-	q.AddOrUpdate(string(p), sortedset.SCORE(q.GetCount()+1), nil)
+	c.candidates[cpl] = append(c.candidates[cpl], p)
 	return true
 }
 
@@ -60,18 +54,18 @@ func (c *cplReplacementCache) push(p peer.ID) bool {
 // returns the peerId and true if successful
 func (c *cplReplacementCache) pop(cpl uint) (peer.ID, bool) {
 	c.Lock()
-	c.Unlock()
+	defer c.Unlock()
 
-	q := c.candidates[cpl]
-	if q != nil && q.GetCount() > 0 {
-		n := q.PopMin()
+	if len(c.candidates[cpl]) != 0 {
+		p := c.candidates[cpl][0]
+		c.candidates[cpl] = c.candidates[cpl][1:]
 
 		// delete the queue if it's empty
-		if q.GetCount() == 0 {
+		if len(c.candidates[cpl]) == 0 {
 			delete(c.candidates, cpl)
 		}
 
-		return peer.ID(n.Key()), true
+		return p, true
 	}
 	return "", false
 }
@@ -83,12 +77,17 @@ func (c *cplReplacementCache) remove(p peer.ID) bool {
 	defer c.Unlock()
 
 	cpl := uint(CommonPrefixLen(c.localPeer, ConvertPeerID(p)))
-	q := c.candidates[cpl]
-	if q != nil {
-		q.Remove(string(p))
+
+	if len(c.candidates[cpl]) != 0 {
+		// remove the peer if it's present
+		for i, pr := range c.candidates[cpl] {
+			if pr == p {
+				c.candidates[cpl] = append(c.candidates[cpl][:i], c.candidates[cpl][i+1:]...)
+			}
+		}
 
 		// remove the queue if it's empty
-		if q.GetCount() == 0 {
+		if len(c.candidates[cpl]) == 0 {
 			delete(c.candidates, cpl)
 		}
 

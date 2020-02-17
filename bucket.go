@@ -38,13 +38,14 @@ func newBucket() *bucket {
 }
 
 // returns all peers in the bucket
+// it is safe for the caller to modify the returned objects as it is a defensive copy
 func (b *bucket) peers() []PeerInfo {
 	b.lk.RLock()
 	defer b.lk.RUnlock()
 	var ps []PeerInfo
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		p := e.Value.(PeerInfo)
-		ps = append(ps, p)
+		p := e.Value.(*PeerInfo)
+		ps = append(ps, *p)
 	}
 	return ps
 }
@@ -55,38 +56,23 @@ func (b *bucket) peerIds() []peer.ID {
 	defer b.lk.RUnlock()
 	ps := make([]peer.ID, 0, b.list.Len())
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		p := e.Value.(PeerInfo)
+		p := e.Value.(*PeerInfo)
 		ps = append(ps, p.Id)
 	}
 	return ps
 }
 
-// returns the peer with the given Id and true if peer exists
-// returns false if the peerId does not exist
-func (b *bucket) getPeer(p peer.ID) (PeerInfo, bool) {
+// returns the peer with the given Id if it exists
+// returns nil if the peerId does not exist
+func (b *bucket) getPeer(p peer.ID) *PeerInfo {
 	b.lk.RLock()
 	defer b.lk.RUnlock()
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		if e.Value.(PeerInfo).Id == p {
-			return e.Value.(PeerInfo), true
+		if e.Value.(*PeerInfo).Id == p {
+			return e.Value.(*PeerInfo)
 		}
 	}
-	return PeerInfo{}, false
-}
-
-// replaces the peer based on the Id.
-// returns true if the replace was successful, false otherwise.
-func (b *bucket) replace(p PeerInfo) bool {
-	b.lk.Lock()
-	defer b.lk.Unlock()
-	for e := b.list.Front(); e != nil; e = e.Next() {
-		if e.Value.(PeerInfo).Id == p.Id {
-			b.list.Remove(e)
-			b.list.PushBack(p)
-			return true
-		}
-	}
-	return false
+	return nil
 }
 
 // removes the peer with the given Id from the bucket.
@@ -95,7 +81,7 @@ func (b *bucket) remove(id peer.ID) bool {
 	b.lk.Lock()
 	defer b.lk.Unlock()
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		if e.Value.(PeerInfo).Id == id {
+		if e.Value.(*PeerInfo).Id == id {
 			b.list.Remove(e)
 			return true
 		}
@@ -108,13 +94,13 @@ func (b *bucket) moveToFront(id peer.ID) {
 	defer b.lk.Unlock()
 
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		if e.Value.(PeerInfo).Id == id {
+		if e.Value.(*PeerInfo).Id == id {
 			b.list.MoveToFront(e)
 		}
 	}
 }
 
-func (b *bucket) pushFront(p PeerInfo) {
+func (b *bucket) pushFront(p *PeerInfo) {
 	b.lk.Lock()
 	b.list.PushFront(p)
 	b.lk.Unlock()
@@ -138,7 +124,7 @@ func (b *bucket) split(cpl int, target ID) *bucket {
 	newbuck.list = out
 	e := b.list.Front()
 	for e != nil {
-		peerID := ConvertPeerID(e.Value.(PeerInfo).Id)
+		peerID := ConvertPeerID(e.Value.(*PeerInfo).Id)
 		peerCPL := CommonPrefixLen(peerID, target)
 		if peerCPL > cpl {
 			cur := e

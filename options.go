@@ -11,7 +11,8 @@ type Option func(*Options) error
 // Options is a structure containing all the functional options that can be used when constructing a Routing Table.
 type Options struct {
 	TableCleanup struct {
-		PeersForValidationFnc PeerSelectionFnc
+		PeerValidationFnc     PeerValidationFunc
+		PeersForValidationFnc PeerSelectionFunc
 		PeerValidationTimeout time.Duration
 		Interval              time.Duration
 	}
@@ -27,8 +28,17 @@ func (o *Options) Apply(opts ...Option) error {
 	return nil
 }
 
+// PeerValidationFnc configures the Peer Validation function used for RT cleanup.
+// Not configuring this disables Routing Table cleanup.
+func PeerValidationFnc(f PeerValidationFunc) Option {
+	return func(o *Options) error {
+		o.TableCleanup.PeerValidationFnc = f
+		return nil
+	}
+}
+
 // PeersForValidationFnc configures the function that will be used to select the peers that need to be validated during cleanup.
-func PeersForValidationFnc(f PeerSelectionFnc) Option {
+func PeersForValidationFnc(f PeerSelectionFunc) Option {
 	return func(o *Options) error {
 		o.TableCleanup.PeersForValidationFnc = f
 		return nil

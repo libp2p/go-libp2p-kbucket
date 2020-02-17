@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCandidateQueue(t *testing.T) {
+func TestCplReplacementCache(t *testing.T) {
 	t.Parallel()
 
 	maxQSize := 2
@@ -61,14 +61,19 @@ func TestCandidateQueue(t *testing.T) {
 	require.False(t, c.push(p3))
 
 	// remove a peer & verify it's been removed
-	require.NotNil(t, c.candidates[2].GetByKey(string(p2)))
-	require.True(t, c.remove(p2))
+	p4 := genPeer(t, local, 0)
+	require.True(t, c.push(p4))
+
 	c.Lock()
-	require.Nil(t, c.candidates[2].GetByKey(string(p2)))
+	require.Len(t, c.candidates[0], 1)
+	require.True(t, c.candidates[0][0] == p4)
 	c.Unlock()
 
-	// now push should work
-	require.True(t, c.push(p3))
+	require.True(t, c.remove(p4))
+
+	c.Lock()
+	require.Len(t, c.candidates[0], 0)
+	c.Unlock()
 }
 
 func genPeer(t *testing.T, local ID, cpl int) peer.ID {
