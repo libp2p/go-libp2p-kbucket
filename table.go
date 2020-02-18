@@ -14,6 +14,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/peerstore"
 
 	logging "github.com/ipfs/go-log"
+	"github.com/jbenet/goprocess"
+	goprocessctx "github.com/jbenet/goprocess/context"
 	mh "github.com/multiformats/go-multihash"
 )
 
@@ -43,7 +45,6 @@ type CplRefresh struct {
 // RoutingTable defines the routing table.
 type RoutingTable struct {
 	ctx context.Context
-
 	// ID of the local peer
 	local ID
 
@@ -79,11 +80,13 @@ type RoutingTable struct {
 	tableCleanupInterval time.Duration
 	// function to select peers that need to be validated
 	peersForValidationFnc PeerSelectionFunc
+
+	proc goprocess.Process
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
 // Passing a nil PeerValidationFunc disables periodic table cleanup.
-func NewRoutingTable(ctx context.Context, bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics,
+func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics,
 	options ...Option) (*RoutingTable, error) {
 
 	var cfg Options
@@ -92,7 +95,7 @@ func NewRoutingTable(ctx context.Context, bucketsize int, localID ID, latency ti
 	}
 
 	rt := &RoutingTable{
-		ctx:        ctx,
+		ctx:        context.Background(),
 		buckets:    []*bucket{newBucket()},
 		bucketsize: bucketsize,
 		local:      localID,
@@ -112,16 +115,23 @@ func NewRoutingTable(ctx context.Context, bucketsize int, localID ID, latency ti
 	}
 
 	rt.cplReplacementCache = newCplReplacementCache(rt.local, rt.bucketsize)
+	rt.proc = goprocessctx.WithContext(rt.ctx)
 
 	// schedule periodic RT cleanup if peer validation function has been passed
 	if rt.peerValidationFnc != nil {
-		go rt.cleanup()
+		rt.proc.Go(rt.cleanup)
 	}
 
 	return rt, nil
 }
 
-func (rt *RoutingTable) cleanup() {
+// Close shuts down the Routing Table & all associated processes.
+// It is safe to call this multiple times.
+func (rt *RoutingTable) Close() error {
+	return rt.proc.Close()
+}
+
+func (rt *RoutingTable) cleanup(proc goprocess.Process) {
 	validatePeerF := func(p peer.ID) bool {
 		queryCtx, cancel := context.WithTimeout(rt.ctx, rt.peerValidationTimeout)
 		defer cancel()
@@ -132,8 +142,6 @@ func (rt *RoutingTable) cleanup() {
 	defer cleanupTickr.Stop()
 	for {
 		select {
-		case <-rt.ctx.Done():
-			return
 		case <-cleanupTickr.C:
 			ps := rt.peersToValidate()
 			for _, pinfo := range ps {
@@ -170,6 +178,8 @@ func (rt *RoutingTable) cleanup() {
 					log.Infof("failed to replace missing peer=%s as all candidates were invalid", pinfo.Id)
 				}
 			}
+		case <-proc.Closing():
+			return
 		}
 	}
 }

@@ -70,11 +70,10 @@ func TestBucket(t *testing.T) {
 
 func TestGenRandPeerID(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(ctx, 1, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(t, err)
 
 	// generate above maxCplForRefresh fails
@@ -93,11 +92,9 @@ func TestGenRandPeerID(t *testing.T) {
 
 func TestRefreshAndGetTrackedCpls(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(ctx, 1, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(t, err)
 
 	// push cpl's for tracking
@@ -123,11 +120,10 @@ func TestRefreshAndGetTrackedCpls(t *testing.T) {
 
 func TestHandlePeerDead(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(ctx, 2, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(t, err)
 
 	// push 3 peers  -> 2 for the first bucket, and 1 as candidates
@@ -161,11 +157,10 @@ func TestHandlePeerDead(t *testing.T) {
 
 func TestTableCallbacks(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(ctx, 10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
@@ -210,11 +205,10 @@ func TestTableCallbacks(t *testing.T) {
 
 func TestHandlePeerDisconnect(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(ctx, 10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(t, err)
 
 	p := test.RandPeerIDFatal(t)
@@ -241,11 +235,10 @@ func TestHandlePeerDisconnect(t *testing.T) {
 // Right now, this just makes sure that it doesnt hang or crash
 func TestHandlePeerAlive(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(ctx, 10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
@@ -269,11 +262,10 @@ func TestHandlePeerAlive(t *testing.T) {
 
 func TestTableFind(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(ctx, 10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
@@ -291,11 +283,10 @@ func TestTableFind(t *testing.T) {
 
 func TestCandidateAddition(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(ctx, 3, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(3, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(t, err)
 
 	// generate 6 peers for the first bucket, 3 to push to it, and 3 as candidates
@@ -322,11 +313,10 @@ func TestCandidateAddition(t *testing.T) {
 
 func TestTableEldestPreferred(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(ctx, 10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(t, err)
 
 	// generate size + 1 peers to saturate a bucket
@@ -355,11 +345,10 @@ func TestTableEldestPreferred(t *testing.T) {
 
 func TestTableFindMultiple(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(ctx, 20, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
@@ -389,13 +378,12 @@ func assertSortedPeerIdsEqual(t *testing.T, a, b []peer.ID) {
 
 func TestTableFindMultipleBuckets(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	local := test.RandPeerIDFatal(t)
 	localID := ConvertPeerID(local)
 	m := pstore.NewMetrics()
 
-	rt, err := NewRoutingTable(ctx, 5, localID, time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(5, localID, time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
@@ -506,11 +494,10 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 // and set GOMAXPROCS above 1
 func TestTableMultithreaded(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	local := peer.ID("localPeer")
 	m := pstore.NewMetrics()
-	tab, err := NewRoutingTable(ctx, 20, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	tab, err := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(t, err)
 	var peers []peer.ID
 	for i := 0; i < 500; i++ {
@@ -548,7 +535,6 @@ func TestTableMultithreaded(t *testing.T) {
 
 func TestTableCleanup(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 	local := test.RandPeerIDFatal(t)
 
 	// Generate:
@@ -591,7 +577,7 @@ func TestTableCleanup(t *testing.T) {
 	}
 
 	// create RT with a very short cleanup interval
-	rt, err := NewRoutingTable(ctx, 3, ConvertPeerID(local), time.Hour, pstore.NewMetrics(), PeerValidationFnc(f),
+	rt, err := NewRoutingTable(3, ConvertPeerID(local), time.Hour, pstore.NewMetrics(), PeerValidationFnc(f),
 		TableCleanupInterval(100*time.Millisecond))
 	require.NoError(t, err)
 
@@ -647,14 +633,16 @@ func TestTableCleanup(t *testing.T) {
 	require.Contains(t, addedCandidates, cplPeerMap[1][3])
 	require.Contains(t, addedCandidates, cplPeerMap[1][5])
 	addedCandidatesLk.Unlock()
+
+	// close RT
+	require.NoError(t, rt.Close())
 }
 
 func BenchmarkHandlePeerAlive(b *testing.B) {
-	ctx := context.Background()
 	b.StopTimer()
 	local := ConvertKey("localKey")
 	m := pstore.NewMetrics()
-	tab, err := NewRoutingTable(ctx, 20, local, time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	tab, err := NewRoutingTable(20, local, time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(b, err)
 
 	var peers []peer.ID
@@ -669,11 +657,10 @@ func BenchmarkHandlePeerAlive(b *testing.B) {
 }
 
 func BenchmarkFinds(b *testing.B) {
-	ctx := context.Background()
 	b.StopTimer()
 	local := ConvertKey("localKey")
 	m := pstore.NewMetrics()
-	tab, err := NewRoutingTable(ctx, 20, local, time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	tab, err := NewRoutingTable(20, local, time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
 	require.NoError(b, err)
 
 	var peers []peer.ID
