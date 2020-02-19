@@ -87,10 +87,10 @@ type RoutingTable struct {
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
 // Passing a nil PeerValidationFunc disables periodic table cleanup.
 func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics,
-	options ...Option) (*RoutingTable, error) {
+	opts ...option) (*RoutingTable, error) {
 
-	var cfg Options
-	if err := cfg.Apply(append([]Option{Defaults}, options...)...); err != nil {
+	var cfg options
+	if err := cfg.Apply(append([]option{Defaults}, opts...)...); err != nil {
 		return nil, err
 	}
 
@@ -108,10 +108,10 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 		PeerRemoved: func(peer.ID) {},
 		PeerAdded:   func(peer.ID) {},
 
-		peerValidationFnc:     cfg.TableCleanup.PeerValidationFnc,
-		peersForValidationFnc: cfg.TableCleanup.PeersForValidationFnc,
-		peerValidationTimeout: cfg.TableCleanup.PeerValidationTimeout,
-		tableCleanupInterval:  cfg.TableCleanup.Interval,
+		peerValidationFnc:     cfg.tableCleanup.peerValidationFnc,
+		peersForValidationFnc: cfg.tableCleanup.peersForValidationFnc,
+		peerValidationTimeout: cfg.tableCleanup.peerValidationTimeout,
+		tableCleanupInterval:  cfg.tableCleanup.interval,
 	}
 
 	rt.cplReplacementCache = newCplReplacementCache(rt.local, rt.bucketsize)

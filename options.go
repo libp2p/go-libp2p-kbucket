@@ -5,21 +5,21 @@ import (
 	"time"
 )
 
-// Option is the Routing Table functional option type.
-type Option func(*Options) error
+// option is the Routing Table functional option type.
+type option func(*options) error
 
-// Options is a structure containing all the functional options that can be used when constructing a Routing Table.
-type Options struct {
-	TableCleanup struct {
-		PeerValidationFnc     PeerValidationFunc
-		PeersForValidationFnc PeerSelectionFunc
-		PeerValidationTimeout time.Duration
-		Interval              time.Duration
+// options is a structure containing all the functional options that can be used when constructing a Routing Table.
+type options struct {
+	tableCleanup struct {
+		peerValidationFnc     PeerValidationFunc
+		peersForValidationFnc PeerSelectionFunc
+		peerValidationTimeout time.Duration
+		interval              time.Duration
 	}
 }
 
-// Apply applies the given options to this Option.
-func (o *Options) Apply(opts ...Option) error {
+// Apply applies the given options to this option.
+func (o *options) Apply(opts ...option) error {
 	for i, opt := range opts {
 		if err := opt(o); err != nil {
 			return fmt.Errorf("routing table option %d failed: %s", i, err)
@@ -30,45 +30,45 @@ func (o *Options) Apply(opts ...Option) error {
 
 // PeerValidationFnc configures the Peer Validation function used for RT cleanup.
 // Not configuring this disables Routing Table cleanup.
-func PeerValidationFnc(f PeerValidationFunc) Option {
-	return func(o *Options) error {
-		o.TableCleanup.PeerValidationFnc = f
+func PeerValidationFnc(f PeerValidationFunc) option {
+	return func(o *options) error {
+		o.tableCleanup.peerValidationFnc = f
 		return nil
 	}
 }
 
 // PeersForValidationFnc configures the function that will be used to select the peers that need to be validated during cleanup.
-func PeersForValidationFnc(f PeerSelectionFunc) Option {
-	return func(o *Options) error {
-		o.TableCleanup.PeersForValidationFnc = f
+func PeersForValidationFnc(f PeerSelectionFunc) option {
+	return func(o *options) error {
+		o.tableCleanup.peersForValidationFnc = f
 		return nil
 	}
 }
 
 // TableCleanupInterval configures the interval between two runs of the Routing Table cleanup routine.
-func TableCleanupInterval(i time.Duration) Option {
-	return func(o *Options) error {
-		o.TableCleanup.Interval = i
+func TableCleanupInterval(i time.Duration) option {
+	return func(o *options) error {
+		o.tableCleanup.interval = i
 		return nil
 	}
 }
 
 // PeerValidationTimeout sets the timeout for a single peer validation during cleanup.
-func PeerValidationTimeout(timeout time.Duration) Option {
-	return func(o *Options) error {
-		o.TableCleanup.PeerValidationTimeout = timeout
+func PeerValidationTimeout(timeout time.Duration) option {
+	return func(o *options) error {
+		o.tableCleanup.peerValidationTimeout = timeout
 		return nil
 	}
 }
 
 // Defaults are the default options. This option will be automatically
 // prepended to any options you pass to the Routing Table constructor.
-var Defaults = func(o *Options) error {
-	o.TableCleanup.PeerValidationTimeout = 30 * time.Second
-	o.TableCleanup.Interval = 2 * time.Minute
+var Defaults = func(o *options) error {
+	o.tableCleanup.peerValidationTimeout = 30 * time.Second
+	o.tableCleanup.interval = 2 * time.Minute
 
 	// default selector function selects all peers that are in missing state.
-	o.TableCleanup.PeersForValidationFnc = func(peers []PeerInfo) []PeerInfo {
+	o.tableCleanup.peersForValidationFnc = func(peers []PeerInfo) []PeerInfo {
 		var selectedPeers []PeerInfo
 		for _, p := range peers {
 			if p.State == PeerStateMissing {
