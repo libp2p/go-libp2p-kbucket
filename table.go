@@ -458,12 +458,10 @@ func (rt *RoutingTable) Print() {
 	for i, b := range rt.buckets {
 		fmt.Printf("\tbucket: %d\n", i)
 
-		b.lk.RLock()
 		for e := b.list.Front(); e != nil; e = e.Next() {
 			p := e.Value.(peer.ID)
 			fmt.Printf("\t\t- %s %s\n", p.Pretty(), rt.metrics.LatencyEWMA(p).String())
 		}
-		b.lk.RUnlock()
 	}
 	rt.tabLock.RUnlock()
 }

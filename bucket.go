@@ -4,8 +4,6 @@ package kbucket
 
 import (
 	"container/list"
-	"sync"
-
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
@@ -26,8 +24,11 @@ type PeerInfo struct {
 }
 
 // bucket holds a list of peers.
+// we synchronize on the Routing Table lock for all access to the bucket
+// and so do not need any locks in the bucket.
+// if we want/need to avoid locking the table for accessing a bucket in the future,
+// it WILL be the caller's responsibility to synchronize all access to a bucket.
 type bucket struct {
-	lk   sync.RWMutex
 	list *list.List
 }
 
@@ -40,8 +41,6 @@ func newBucket() *bucket {
 // returns all peers in the bucket
 // it is safe for the caller to modify the returned objects as it is a defensive copy
 func (b *bucket) peers() []PeerInfo {
-	b.lk.RLock()
-	defer b.lk.RUnlock()
 	var ps []PeerInfo
 	for e := b.list.Front(); e != nil; e = e.Next() {
 		p := e.Value.(*PeerInfo)
@@ -52,8 +51,6 @@ func (b *bucket) peers() []PeerInfo {
 
 // return the Ids of all the peers in the bucket.
 func (b *bucket) peerIds() []peer.ID {
-	b.lk.RLock()
-	defer b.lk.RUnlock()
 	ps := make([]peer.ID, 0, b.list.Len())
 	for e := b.list.Front(); e != nil; e = e.Next() {
 		p := e.Value.(*PeerInfo)
@@ -65,8 +62,6 @@ func (b *bucket) peerIds() []peer.ID {
 // returns the peer with the given Id if it exists
 // returns nil if the peerId does not exist
 func (b *bucket) getPeer(p peer.ID) *PeerInfo {
-	b.lk.RLock()
-	defer b.lk.RUnlock()
 	for e := b.list.Front(); e != nil; e = e.Next() {
 		if e.Value.(*PeerInfo).Id == p {
 			return e.Value.(*PeerInfo)
@@ -78,8 +73,6 @@ func (b *bucket) getPeer(p peer.ID) *PeerInfo {
 // removes the peer with the given Id from the bucket.
 // returns true if successful, false otherwise.
 func (b *bucket) remove(id peer.ID) bool {
-	b.lk.Lock()
-	defer b.lk.Unlock()
 	for e := b.list.Front(); e != nil; e = e.Next() {
 		if e.Value.(*PeerInfo).Id == id {
 			b.list.Remove(e)
@@ -90,8 +83,6 @@ func (b *bucket) remove(id peer.ID) bool {
 }
 
 func (b *bucket) moveToFront(id peer.ID) {
-	b.lk.Lock()
-	defer b.lk.Unlock()
 
 	for e := b.list.Front(); e != nil; e = e.Next() {
 		if e.Value.(*PeerInfo).Id == id {
@@ -101,14 +92,10 @@ func (b *bucket) moveToFront(id peer.ID) {
 }
 
 func (b *bucket) pushFront(p *PeerInfo) {
-	b.lk.Lock()
 	b.list.PushFront(p)
-	b.lk.Unlock()
 }
 
 func (b *bucket) len() int {
-	b.lk.RLock()
-	defer b.lk.RUnlock()
 	return b.list.Len()
 }
 
@@ -116,9 +103,6 @@ func (b *bucket) len() int {
 // peers with CPL equal to cpl, the returned bucket will have peers with CPL
 // greater than cpl (returned bucket has closer peers)
 func (b *bucket) split(cpl int, target ID) *bucket {
-	b.lk.Lock()
-	defer b.lk.Unlock()
-
 	out := list.New()
 	newbuck := newBucket()
 	newbuck.list = out
