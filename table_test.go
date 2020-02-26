@@ -1,15 +1,22 @@
 package kbucket
 
 import (
+	"context"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/test"
+
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 	"github.com/stretchr/testify/require"
 )
+
+var PeerAlwaysValidFnc = func(ctx context.Context, p peer.ID) bool {
+	return true
+}
 
 // Test basic features of the bucket struct
 func TestBucket(t *testing.T) {
@@ -20,33 +27,43 @@ func TestBucket(t *testing.T) {
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 100; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
-		b.PushFront(peers[i])
+		b.pushFront(&PeerInfo{peers[i], PeerStateActive})
 	}
 
 	local := test.RandPeerIDFatal(t)
 	localID := ConvertPeerID(local)
 
-	i := rand.Intn(len(peers))
-	if !b.Has(peers[i]) {
-		t.Errorf("Failed to find peer: %v", peers[i])
-	}
+	infos := b.peers()
+	require.Len(t, infos, 100)
 
-	spl := b.Split(0, ConvertPeerID(local))
+	i := rand.Intn(len(peers))
+	p := b.getPeer(peers[i])
+	require.NotNil(t, p)
+	require.Equal(t, peers[i], p.Id)
+	require.Equal(t, PeerStateActive, p.State)
+
+	// mark as missing
+	p.State = PeerStateMissing
+	p = b.getPeer(peers[i])
+	require.NotNil(t, p)
+	require.Equal(t, PeerStateMissing, p.State)
+
+	spl := b.split(0, ConvertPeerID(local))
 	llist := b.list
 	for e := llist.Front(); e != nil; e = e.Next() {
-		p := ConvertPeerID(e.Value.(peer.ID))
+		p := ConvertPeerID(e.Value.(*PeerInfo).Id)
 		cpl := CommonPrefixLen(p, localID)
 		if cpl > 0 {
-			t.Fatalf("Split failed. found id with cpl > 0 in 0 bucket")
+			t.Fatalf("split failed. found id with cpl > 0 in 0 bucket")
 		}
 	}
 
 	rlist := spl.list
 	for e := rlist.Front(); e != nil; e = e.Next() {
-		p := ConvertPeerID(e.Value.(peer.ID))
+		p := ConvertPeerID(e.Value.(*PeerInfo).Id)
 		cpl := CommonPrefixLen(p, localID)
 		if cpl == 0 {
-			t.Fatalf("Split failed. found id with cpl == 0 in non 0 bucket")
+			t.Fatalf("split failed. found id with cpl == 0 in non 0 bucket")
 		}
 	}
 }
@@ -56,7 +73,8 @@ func TestGenRandPeerID(t *testing.T) {
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m)
+	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
 
 	// generate above maxCplForRefresh fails
 	p, err := rt.GenRandPeerID(maxCplForRefresh + 1)
@@ -74,12 +92,12 @@ func TestGenRandPeerID(t *testing.T) {
 
 func TestRefreshAndGetTrackedCpls(t *testing.T) {
 	t.Parallel()
-
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m)
+	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
 
-	// add cpl's for tracking
+	// push cpl's for tracking
 	for cpl := uint(0); cpl < maxCplForRefresh; cpl++ {
 		peerID, err := rt.GenRandPeerID(cpl)
 		require.NoError(t, err)
@@ -100,12 +118,50 @@ func TestRefreshAndGetTrackedCpls(t *testing.T) {
 	}
 }
 
+func TestHandlePeerDead(t *testing.T) {
+	t.Parallel()
+
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
+
+	// push 3 peers  -> 2 for the first bucket, and 1 as candidates
+	var peers []peer.ID
+	for i := 0; i < 3; i++ {
+		p, err := rt.GenRandPeerID(uint(0))
+		require.NoError(t, err)
+		require.NotEmpty(t, p)
+		rt.HandlePeerAlive(p)
+		peers = append(peers, p)
+	}
+
+	// ensure we have 1 candidate
+	rt.cplReplacementCache.Lock()
+	require.NotNil(t, rt.cplReplacementCache.candidates[uint(0)])
+	require.True(t, len(rt.cplReplacementCache.candidates[uint(0)]) == 1)
+	rt.cplReplacementCache.Unlock()
+
+	// mark a peer as dead and ensure it's not in the RT
+	require.NotEmpty(t, rt.Find(peers[0]))
+	rt.HandlePeerDead(peers[0])
+	require.Empty(t, rt.Find(peers[0]))
+
+	// mark the peer as dead & verify we don't get it as a candidate
+	rt.HandlePeerDead(peers[2])
+
+	rt.cplReplacementCache.Lock()
+	require.Nil(t, rt.cplReplacementCache.candidates[uint(0)])
+	rt.cplReplacementCache.Unlock()
+}
+
 func TestTableCallbacks(t *testing.T) {
 	t.Parallel()
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 100; i++ {
@@ -120,18 +176,18 @@ func TestTableCallbacks(t *testing.T) {
 		delete(pset, p)
 	}
 
-	rt.Update(peers[0])
+	rt.HandlePeerAlive(peers[0])
 	if _, ok := pset[peers[0]]; !ok {
 		t.Fatal("should have this peer")
 	}
 
-	rt.Remove(peers[0])
+	rt.HandlePeerDead(peers[0])
 	if _, ok := pset[peers[0]]; ok {
 		t.Fatal("should not have this peer")
 	}
 
 	for _, p := range peers {
-		rt.Update(p)
+		rt.HandlePeerAlive(p)
 	}
 
 	out := rt.ListPeers()
@@ -147,22 +203,52 @@ func TestTableCallbacks(t *testing.T) {
 	}
 }
 
-// Right now, this just makes sure that it doesnt hang or crash
-func TestTableUpdate(t *testing.T) {
+func TestHandlePeerDisconnect(t *testing.T) {
 	t.Parallel()
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
+
+	p := test.RandPeerIDFatal(t)
+	// mark a peer as alive
+	rt.HandlePeerAlive(p)
+
+	// verify it's active
+	rt.tabLock.Lock()
+	bp := rt.buckets[0].getPeer(p)
+	require.NotNil(t, bp)
+	require.NotNil(t, bp)
+	require.Equal(t, PeerStateActive, bp.State)
+	rt.tabLock.Unlock()
+
+	//now mark it as disconnected & verify it's in missing state
+	rt.HandlePeerDisconnect(p)
+	rt.tabLock.Lock()
+	bp = rt.buckets[0].getPeer(p)
+	require.NotNil(t, bp)
+	require.Equal(t, PeerStateMissing, bp.State)
+	rt.tabLock.Unlock()
+}
+
+// Right now, this just makes sure that it doesnt hang or crash
+func TestHandlePeerAlive(t *testing.T) {
+	t.Parallel()
+
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 100; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
 	}
 
-	// Testing Update
+	// Testing HandlePeerAlive
 	for i := 0; i < 10000; i++ {
-		rt.Update(peers[rand.Intn(len(peers))])
+		rt.HandlePeerAlive(peers[rand.Intn(len(peers))])
 	}
 
 	for i := 0; i < 100; i++ {
@@ -179,12 +265,13 @@ func TestTableFind(t *testing.T) {
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 5; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
-		rt.Update(peers[i])
+		rt.HandlePeerAlive(peers[i])
 	}
 
 	t.Logf("Searching for peer: '%s'", peers[2])
@@ -194,12 +281,43 @@ func TestTableFind(t *testing.T) {
 	}
 }
 
+func TestCandidateAddition(t *testing.T) {
+	t.Parallel()
+
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(3, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
+
+	// generate 6 peers for the first bucket, 3 to push to it, and 3 as candidates
+	var peers []peer.ID
+	for i := 0; i < 6; i++ {
+		p, err := rt.GenRandPeerID(uint(0))
+		require.NoError(t, err)
+		require.NotEmpty(t, p)
+		rt.HandlePeerAlive(p)
+		peers = append(peers, p)
+	}
+
+	// fetch & verify candidates
+	for _, p := range peers[3:] {
+		ap, b := rt.cplReplacementCache.pop(0)
+		require.True(t, b)
+		require.Equal(t, p, ap)
+	}
+
+	// now pop should fail as queue should be empty
+	_, b := rt.cplReplacementCache.pop(0)
+	require.False(t, b)
+}
+
 func TestTableEldestPreferred(t *testing.T) {
 	t.Parallel()
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m)
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
 
 	// generate size + 1 peers to saturate a bucket
 	peers := make([]peer.ID, 15)
@@ -212,14 +330,14 @@ func TestTableEldestPreferred(t *testing.T) {
 
 	// test 10 first peers are accepted.
 	for _, p := range peers[:10] {
-		if _, err := rt.Update(p); err != nil {
+		if _, err := rt.HandlePeerAlive(p); err != nil {
 			t.Errorf("expected all 10 peers to be accepted; instead got: %v", err)
 		}
 	}
 
 	// test next 5 peers are rejected.
 	for _, p := range peers[10:] {
-		if _, err := rt.Update(p); err != ErrPeerRejectedNoCapacity {
+		if _, err := rt.HandlePeerAlive(p); err != ErrPeerRejectedNoCapacity {
 			t.Errorf("expected extra 5 peers to be rejected; instead got: %v", err)
 		}
 	}
@@ -230,12 +348,13 @@ func TestTableFindMultiple(t *testing.T) {
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m)
+	rt, err := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 18; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
-		rt.Update(peers[i])
+		rt.HandlePeerAlive(peers[i])
 	}
 
 	t.Logf("Searching for peer: '%s'", peers[2])
@@ -264,12 +383,13 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 	localID := ConvertPeerID(local)
 	m := pstore.NewMetrics()
 
-	rt := NewRoutingTable(5, localID, time.Hour, m)
+	rt, err := NewRoutingTable(5, localID, time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 100; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
-		rt.Update(peers[i])
+		rt.HandlePeerAlive(peers[i])
 	}
 
 	targetID := ConvertPeerID(peers[2])
@@ -277,7 +397,7 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 	closest := SortClosestPeers(rt.ListPeers(), targetID)
 	targetCpl := CommonPrefixLen(localID, targetID)
 
-	// Split the peers into closer, same, and further from the key (than us).
+	// split the peers into closer, same, and further from the key (than us).
 	var (
 		closer, same, further []peer.ID
 	)
@@ -377,7 +497,8 @@ func TestTableMultithreaded(t *testing.T) {
 
 	local := peer.ID("localPeer")
 	m := pstore.NewMetrics()
-	tab := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m)
+	tab, err := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
 	var peers []peer.ID
 	for i := 0; i < 500; i++ {
 		peers = append(peers, test.RandPeerIDFatal(t))
@@ -387,7 +508,7 @@ func TestTableMultithreaded(t *testing.T) {
 	go func() {
 		for i := 0; i < 1000; i++ {
 			n := rand.Intn(len(peers))
-			tab.Update(peers[n])
+			tab.HandlePeerAlive(peers[n])
 		}
 		done <- struct{}{}
 	}()
@@ -395,7 +516,7 @@ func TestTableMultithreaded(t *testing.T) {
 	go func() {
 		for i := 0; i < 1000; i++ {
 			n := rand.Intn(len(peers))
-			tab.Update(peers[n])
+			tab.HandlePeerAlive(peers[n])
 		}
 		done <- struct{}{}
 	}()
@@ -412,11 +533,117 @@ func TestTableMultithreaded(t *testing.T) {
 	<-done
 }
 
-func BenchmarkUpdates(b *testing.B) {
+func TestTableCleanup(t *testing.T) {
+	t.Parallel()
+	local := test.RandPeerIDFatal(t)
+
+	// Generate:
+	// 6 peers with CPL 0
+	// 6 peers with CPL 1
+	cplPeerMap := make(map[int][]peer.ID)
+	for cpl := 0; cpl < 2; cpl++ {
+		i := 0
+
+		for {
+			p := test.RandPeerIDFatal(t)
+			if CommonPrefixLen(ConvertPeerID(local), ConvertPeerID(p)) == cpl {
+				cplPeerMap[cpl] = append(cplPeerMap[cpl], p)
+
+				i++
+				if i == 6 {
+					break
+				}
+			}
+		}
+	}
+
+	// mock peer validation fnc that successfully validates p[1], p[3] & p[5]
+	var addedCandidatesLk sync.Mutex
+	addedCandidates := make(map[peer.ID]struct{})
+	f := func(ctx context.Context, p peer.ID) bool {
+		cpl := CommonPrefixLen(ConvertPeerID(local), ConvertPeerID(p))
+		if cplPeerMap[cpl][1] == p || cplPeerMap[cpl][3] == p || cplPeerMap[cpl][5] == p {
+			// 1 is already in the RT, but 3 & 5 are candidates
+			if cplPeerMap[cpl][3] == p || cplPeerMap[cpl][5] == p {
+				addedCandidatesLk.Lock()
+				addedCandidates[p] = struct{}{}
+				addedCandidatesLk.Unlock()
+			}
+
+			return true
+		} else {
+			return false
+		}
+	}
+
+	// create RT with a very short cleanup interval
+	rt, err := NewRoutingTable(3, ConvertPeerID(local), time.Hour, pstore.NewMetrics(), PeerValidationFnc(f),
+		TableCleanupInterval(100*time.Millisecond))
+	require.NoError(t, err)
+
+	// for each CPL, p[0], p[1] & p[2] got the bucket & p[3], p[4] & p[5] become candidates
+	for _, peers := range cplPeerMap {
+		for _, p := range peers {
+			rt.HandlePeerAlive(p)
+
+		}
+	}
+
+	// validate current state
+	rt.tabLock.RLock()
+	require.Len(t, rt.ListPeers(), 6)
+	ps0 := rt.buckets[0].peerIds()
+	require.Len(t, ps0, 3)
+	ps1 := rt.buckets[1].peerIds()
+	require.Len(t, ps1, 3)
+	require.Contains(t, ps0, cplPeerMap[0][0])
+	require.Contains(t, ps0, cplPeerMap[0][1])
+	require.Contains(t, ps0, cplPeerMap[0][2])
+	require.Contains(t, ps1, cplPeerMap[1][0])
+	require.Contains(t, ps1, cplPeerMap[1][1])
+	require.Contains(t, ps1, cplPeerMap[1][2])
+	rt.tabLock.RUnlock()
+
+	// now disconnect peers 0 1 & 2 from both buckets so it has only 0 left after it gets validated
+	for _, peers := range cplPeerMap {
+		rt.HandlePeerDisconnect(peers[0])
+		rt.HandlePeerDisconnect(peers[1])
+		rt.HandlePeerDisconnect(peers[2])
+	}
+
+	// let RT cleanup complete
+	time.Sleep(1 * time.Second)
+
+	// verify RT state
+	rt.tabLock.RLock()
+	require.Len(t, rt.ListPeers(), 2)
+	ps0 = rt.buckets[0].peerIds()
+	require.Len(t, ps0, 1)
+	ps1 = rt.buckets[1].peerIds()
+	require.Len(t, ps1, 1)
+	require.Contains(t, ps0, cplPeerMap[0][1])
+	require.Contains(t, ps1, cplPeerMap[1][1])
+	rt.tabLock.RUnlock()
+
+	// verify candidate state
+	addedCandidatesLk.Lock()
+	require.Len(t, addedCandidates, 4)
+	require.Contains(t, addedCandidates, cplPeerMap[0][3])
+	require.Contains(t, addedCandidates, cplPeerMap[0][5])
+	require.Contains(t, addedCandidates, cplPeerMap[1][3])
+	require.Contains(t, addedCandidates, cplPeerMap[1][5])
+	addedCandidatesLk.Unlock()
+
+	// close RT
+	require.NoError(t, rt.Close())
+}
+
+func BenchmarkHandlePeerAlive(b *testing.B) {
 	b.StopTimer()
 	local := ConvertKey("localKey")
 	m := pstore.NewMetrics()
-	tab := NewRoutingTable(20, local, time.Hour, m)
+	tab, err := NewRoutingTable(20, local, time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(b, err)
 
 	var peers []peer.ID
 	for i := 0; i < b.N; i++ {
@@ -425,7 +652,7 @@ func BenchmarkUpdates(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		tab.Update(peers[i])
+		tab.HandlePeerAlive(peers[i])
 	}
 }
 
@@ -433,12 +660,13 @@ func BenchmarkFinds(b *testing.B) {
 	b.StopTimer()
 	local := ConvertKey("localKey")
 	m := pstore.NewMetrics()
-	tab := NewRoutingTable(20, local, time.Hour, m)
+	tab, err := NewRoutingTable(20, local, time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(b, err)
 
 	var peers []peer.ID
 	for i := 0; i < b.N; i++ {
 		peers = append(peers, test.RandPeerIDFatal(b))
-		tab.Update(peers[i])
+		tab.HandlePeerAlive(peers[i])
 	}
 
 	b.StartTimer()
