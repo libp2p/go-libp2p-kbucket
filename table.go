@@ -459,7 +459,7 @@ func (rt *RoutingTable) Print() {
 		fmt.Printf("\tbucket: %d\n", i)
 
 		for e := b.list.Front(); e != nil; e = e.Next() {
-			p := e.Value.(peer.ID)
+			p := e.Value.(*PeerInfo).Id
 			fmt.Printf("\t\t- %s %s\n", p.Pretty(), rt.metrics.LatencyEWMA(p).String())
 		}
 	}
