@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// option is the Routing Table functional option type.
-type option func(*options) error
+// Option is the Routing Table functional option type.
+type Option func(*options) error
 
 // options is a structure containing all the functional options that can be used when constructing a Routing Table.
 type options struct {
@@ -19,7 +19,7 @@ type options struct {
 }
 
 // Apply applies the given options to this option.
-func (o *options) Apply(opts ...option) error {
+func (o *options) Apply(opts ...Option) error {
 	for i, opt := range opts {
 		if err := opt(o); err != nil {
 			return fmt.Errorf("routing table option %d failed: %s", i, err)
@@ -30,7 +30,7 @@ func (o *options) Apply(opts ...option) error {
 
 // PeerValidationFnc configures the Peer Validation function used for RT cleanup.
 // Not configuring this disables Routing Table cleanup.
-func PeerValidationFnc(f PeerValidationFunc) option {
+func PeerValidationFnc(f PeerValidationFunc) Option {
 	return func(o *options) error {
 		o.tableCleanup.peerValidationFnc = f
 		return nil
@@ -38,7 +38,7 @@ func PeerValidationFnc(f PeerValidationFunc) option {
 }
 
 // PeersForValidationFnc configures the function that will be used to select the peers that need to be validated during cleanup.
-func PeersForValidationFnc(f PeerSelectionFunc) option {
+func PeersForValidationFnc(f PeerSelectionFunc) Option {
 	return func(o *options) error {
 		o.tableCleanup.peersForValidationFnc = f
 		return nil
@@ -46,7 +46,7 @@ func PeersForValidationFnc(f PeerSelectionFunc) option {
 }
 
 // TableCleanupInterval configures the interval between two runs of the Routing Table cleanup routine.
-func TableCleanupInterval(i time.Duration) option {
+func TableCleanupInterval(i time.Duration) Option {
 	return func(o *options) error {
 		o.tableCleanup.interval = i
 		return nil
@@ -54,7 +54,7 @@ func TableCleanupInterval(i time.Duration) option {
 }
 
 // PeerValidationTimeout sets the timeout for a single peer validation during cleanup.
-func PeerValidationTimeout(timeout time.Duration) option {
+func PeerValidationTimeout(timeout time.Duration) Option {
 	return func(o *options) error {
 		o.tableCleanup.peerValidationTimeout = timeout
 		return nil

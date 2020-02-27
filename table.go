@@ -87,10 +87,10 @@ type RoutingTable struct {
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
 // Passing a nil PeerValidationFunc disables periodic table cleanup.
 func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics,
-	opts ...option) (*RoutingTable, error) {
+	opts ...Option) (*RoutingTable, error) {
 
 	var cfg options
-	if err := cfg.Apply(append([]option{Defaults}, opts...)...); err != nil {
+	if err := cfg.Apply(append([]Option{Defaults}, opts...)...); err != nil {
 		return nil, err
 	}
 
