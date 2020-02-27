@@ -196,6 +196,34 @@ func (rt *RoutingTable) peersToValidate() []PeerInfo {
 	return rt.peersForValidationFnc(peers)
 }
 
+// NPeersForCPL returns the number of peers we have for a given Cpl
+func (rt *RoutingTable) NPeersForCpl(cpl uint) int {
+	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
+
+	// it's in the last bucket
+	if int(cpl) >= len(rt.buckets)-1 {
+		count := 0
+		b := rt.buckets[len(rt.buckets)-1]
+		for _, p := range b.peerIds() {
+			if CommonPrefixLen(rt.local, ConvertPeerID(p)) == int(cpl) {
+				count++
+			}
+		}
+		return count
+	} else {
+		return rt.buckets[cpl].len()
+	}
+}
+
+// IsBucketFull returns true if the Logical bucket for a given Cpl is full
+func (rt *RoutingTable) IsBucketFull(cpl uint) bool {
+	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
+
+	return rt.NPeersForCpl(cpl) == rt.bucketsize
+}
+
 // GetTrackedCplsForRefresh returns the Cpl's we are tracking for refresh.
 // Caller is free to modify the returned slice as it is a defensive copy.
 func (rt *RoutingTable) GetTrackedCplsForRefresh() []CplRefresh {
