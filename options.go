@@ -18,8 +18,8 @@ type options struct {
 	}
 }
 
-// Apply applies the given options to this option.
-func (o *options) Apply(opts ...Option) error {
+// apply applies the given options to this option.
+func (o *options) apply(opts ...Option) error {
 	for i, opt := range opts {
 		if err := opt(o); err != nil {
 			return fmt.Errorf("routing table option %d failed: %s", i, err)

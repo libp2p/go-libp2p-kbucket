@@ -18,6 +18,15 @@ var PeerAlwaysValidFnc = func(ctx context.Context, p peer.ID) bool {
 	return true
 }
 
+func TestPrint(t *testing.T) {
+	t.Parallel()
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
+	rt.Print()
+}
+
 // Test basic features of the bucket struct
 func TestBucket(t *testing.T) {
 	t.Parallel()

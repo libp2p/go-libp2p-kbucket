@@ -90,7 +90,7 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 	opts ...Option) (*RoutingTable, error) {
 
 	var cfg options
-	if err := cfg.Apply(append([]Option{Defaults}, opts...)...); err != nil {
+	if err := cfg.apply(append([]Option{Defaults}, opts...)...); err != nil {
 		return nil, err
 	}
 
