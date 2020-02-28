@@ -18,6 +18,15 @@ var PeerAlwaysValidFnc = func(ctx context.Context, p peer.ID) bool {
 	return true
 }
 
+func TestPrint(t *testing.T) {
+	t.Parallel()
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
+	rt.Print()
+}
+
 // Test basic features of the bucket struct
 func TestBucket(t *testing.T) {
 	t.Parallel()
@@ -88,6 +97,42 @@ func TestGenRandPeerID(t *testing.T) {
 
 		require.True(t, uint(CommonPrefixLen(ConvertPeerID(peerID), rt.local)) == cpl, "failed for cpl=%d", cpl)
 	}
+}
+
+func TestNPeersForCpl(t *testing.T) {
+	t.Parallel()
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	require.NoError(t, err)
+
+	require.Equal(t, 0, rt.NPeersForCpl(0))
+	require.Equal(t, 0, rt.NPeersForCpl(1))
+
+	// one peer with cpl 1
+	p, _ := rt.GenRandPeerID(1)
+	rt.HandlePeerAlive(p)
+	require.Equal(t, 0, rt.NPeersForCpl(0))
+	require.Equal(t, 1, rt.NPeersForCpl(1))
+	require.Equal(t, 0, rt.NPeersForCpl(2))
+
+	// one peer with cpl 0
+	p, _ = rt.GenRandPeerID(0)
+	rt.HandlePeerAlive(p)
+	require.Equal(t, 1, rt.NPeersForCpl(0))
+	require.Equal(t, 1, rt.NPeersForCpl(1))
+	require.Equal(t, 0, rt.NPeersForCpl(2))
+
+	// split the bucket with a peer with cpl 1
+	p, _ = rt.GenRandPeerID(1)
+	rt.HandlePeerAlive(p)
+	require.Equal(t, 1, rt.NPeersForCpl(0))
+	require.Equal(t, 2, rt.NPeersForCpl(1))
+	require.Equal(t, 0, rt.NPeersForCpl(2))
+
+	p, _ = rt.GenRandPeerID(0)
+	rt.HandlePeerAlive(p)
+	require.Equal(t, 2, rt.NPeersForCpl(0))
 }
 
 func TestRefreshAndGetTrackedCpls(t *testing.T) {
