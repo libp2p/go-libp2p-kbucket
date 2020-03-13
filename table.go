@@ -14,8 +14,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/peerstore"
 
 	logging "github.com/ipfs/go-log"
-	"github.com/jbenet/goprocess"
-	goprocessctx "github.com/jbenet/goprocess/context"
 	mh "github.com/multiformats/go-multihash"
 )
 
@@ -44,7 +42,11 @@ type CplRefresh struct {
 
 // RoutingTable defines the routing table.
 type RoutingTable struct {
+	// the routing table context
 	ctx context.Context
+	// function to cancel the RT context
+	ctxCancel context.CancelFunc
+
 	// ID of the local peer
 	local ID
 
@@ -71,17 +73,20 @@ type RoutingTable struct {
 	PeerRemoved func(peer.ID)
 	PeerAdded   func(peer.ID)
 
+	// is peer replacement enabled ?
+	isReplaceEnabled bool
+	// peerReplaceCh is the channel to write a peer replacement request to
+	peerReplaceCh chan peer.ID
+
 	// function to determine the validity of a peer for RT membership
 	peerValidationFnc PeerValidationFunc
-
 	// timeout for a single call to the peer validation function
 	peerValidationTimeout time.Duration
+
 	// interval between two runs of the table cleanup routine
 	tableCleanupInterval time.Duration
-	// function to select peers that need to be validated
+	// function to select peers that need to be validated during cleanup
 	peersForValidationFnc PeerSelectionFunc
-
-	proc goprocess.Process
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
@@ -95,7 +100,6 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 	}
 
 	rt := &RoutingTable{
-		ctx:        context.Background(),
 		buckets:    []*bucket{newBucket()},
 		bucketsize: bucketsize,
 		local:      localID,
@@ -108,18 +112,24 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 		PeerRemoved: func(peer.ID) {},
 		PeerAdded:   func(peer.ID) {},
 
+		peerReplaceCh: make(chan peer.ID, bucketsize*2),
+
 		peerValidationFnc:     cfg.tableCleanup.peerValidationFnc,
 		peersForValidationFnc: cfg.tableCleanup.peersForValidationFnc,
 		peerValidationTimeout: cfg.tableCleanup.peerValidationTimeout,
 		tableCleanupInterval:  cfg.tableCleanup.interval,
 	}
 
-	rt.cplReplacementCache = newCplReplacementCache(rt.local, rt.bucketsize)
-	rt.proc = goprocessctx.WithContext(rt.ctx)
+	// create the replacement cache
+	rt.cplReplacementCache = newCplReplacementCache(rt.local, rt.bucketsize*2)
+
+	rt.ctx, rt.ctxCancel = context.WithCancel(context.Background())
 
 	// schedule periodic RT cleanup if peer validation function has been passed
-	if rt.peerValidationFnc != nil {
-		rt.proc.Go(rt.cleanup)
+	rt.isReplaceEnabled = (rt.peerValidationFnc != nil)
+	if rt.isReplaceEnabled {
+		go rt.cleanup()
+		go rt.startPeerReplacement()
 	}
 
 	return rt, nil
@@ -128,10 +138,11 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 // Close shuts down the Routing Table & all associated processes.
 // It is safe to call this multiple times.
 func (rt *RoutingTable) Close() error {
-	return rt.proc.Close()
+	rt.ctxCancel()
+	return nil
 }
 
-func (rt *RoutingTable) cleanup(proc goprocess.Process) {
+func (rt *RoutingTable) cleanup() {
 	validatePeerF := func(p peer.ID) bool {
 		queryCtx, cancel := context.WithTimeout(rt.ctx, rt.peerValidationTimeout)
 		defer cancel()
@@ -153,32 +164,45 @@ func (rt *RoutingTable) cleanup(proc goprocess.Process) {
 					continue
 				}
 
-				// peer does not seem to be alive, let's try candidates now
-				log.Infof("failed to validate missing peer=%s, will try candidates now...", pinfo.Id)
-				// evict missing peer
+				// peer does not seem to be alive, let's try to replace it
+				log.Infof("failed to validate missing peer=%s, evicting it from the RT & requesting a replace", pinfo.Id)
+				// evict missing peer & request replacement
 				rt.HandlePeerDead(pinfo.Id)
-
-				// keep trying replacement candidates for the missing peer till we get a successful validation or
-				// we run out of candidates
-				cpl := uint(CommonPrefixLen(ConvertPeerID(pinfo.Id), rt.local))
-				c, notEmpty := rt.cplReplacementCache.pop(cpl)
-				for notEmpty {
-					if validatePeerF(c) {
-						log.Infof("successfully validated candidate=%s for missing peer=%s", c, pinfo.Id)
-						break
-					}
-					log.Infof("failed to validated candidate=%s", c)
-					// remove candidate
-					rt.HandlePeerDead(c)
-
-					c, notEmpty = rt.cplReplacementCache.pop(cpl)
-				}
-
-				if !notEmpty {
-					log.Infof("failed to replace missing peer=%s as all candidates were invalid", pinfo.Id)
-				}
 			}
-		case <-proc.Closing():
+		case <-rt.ctx.Done():
+			return
+		}
+	}
+}
+
+// replaces a peer using a valid peer from the replacement cache
+func (rt *RoutingTable) startPeerReplacement() {
+	validatePeerF := func(p peer.ID) bool {
+		queryCtx, cancel := context.WithTimeout(rt.ctx, rt.peerValidationTimeout)
+		defer cancel()
+		return rt.peerValidationFnc(queryCtx, p)
+	}
+
+	for {
+		select {
+		case p := <-rt.peerReplaceCh:
+			// keep trying replacement candidates till we get a successful validation or
+			// we run out of candidates
+			cpl := uint(CommonPrefixLen(ConvertPeerID(p), rt.local))
+			c, notEmpty := rt.cplReplacementCache.pop(cpl)
+			for notEmpty {
+				if validatePeerF(c) {
+					log.Infof("successfully validated candidate=%s for peer=%s", c, p)
+					break
+				}
+				log.Infof("failed to validated candidate=%s", c)
+				c, notEmpty = rt.cplReplacementCache.pop(cpl)
+			}
+
+			if !notEmpty {
+				log.Infof("failed to replace missing peer=%s as all candidates were invalid", p)
+			}
+		case <-rt.ctx.Done():
 			return
 		}
 	}
@@ -341,17 +365,25 @@ func (rt *RoutingTable) HandlePeerAlive(p peer.ID) (evicted peer.ID, err error) 
 }
 
 // HandlePeerDead should be called when the caller is sure that a peer is dead/not dialable.
-// It evicts the peer from the Routing Table and also removes it as a replacement candidate if it is one.
+// It evicts the peer from the Routing Table and tries to replace it with a valid & eligible
+// candidate from the replacement cache.
 func (rt *RoutingTable) HandlePeerDead(p peer.ID) {
-	// remove it as a candidate
-	rt.cplReplacementCache.remove(p)
-
 	// remove it from the RT
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
 	if bucket.remove(p) {
+		// request a replacement
+		if rt.isReplaceEnabled {
+			select {
+			case rt.peerReplaceCh <- p:
+			default:
+				log.Errorf("unable to request replacement for peer=%s as queue for replace requests is full", p)
+			}
+		}
+
+		// peer removed callback
 		rt.PeerRemoved(p)
 	}
 }

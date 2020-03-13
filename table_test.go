@@ -167,37 +167,57 @@ func TestHandlePeerDead(t *testing.T) {
 	t.Parallel()
 
 	local := test.RandPeerIDFatal(t)
+	var candidate peer.ID
+	for {
+		candidate = test.RandPeerIDFatal(t)
+		if CommonPrefixLen(ConvertPeerID(candidate), ConvertPeerID(local)) == 0 {
+			break
+		}
+	}
+
+	var lk sync.Mutex
+	var added peer.ID
+	f := func(ctx context.Context, p peer.ID) bool {
+		if p == candidate {
+			lk.Lock()
+			added = p
+			lk.Unlock()
+		}
+		return true
+	}
+
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(f))
 	require.NoError(t, err)
 
-	// push 3 peers  -> 2 for the first bucket, and 1 as candidates
-	var peers []peer.ID
-	for i := 0; i < 3; i++ {
-		p, err := rt.GenRandPeerID(uint(0))
-		require.NoError(t, err)
-		require.NotEmpty(t, p)
-		rt.HandlePeerAlive(p)
-		peers = append(peers, p)
-	}
+	p1, _ := rt.GenRandPeerID(0)
+	p2, _ := rt.GenRandPeerID(0)
+	rt.HandlePeerAlive(p1)
+	rt.HandlePeerAlive(p2)
+	rt.HandlePeerAlive(candidate)
+
+	// ensure p1 & p2 are in the RT
+	require.Len(t, rt.ListPeers(), 2)
+	require.Contains(t, rt.ListPeers(), p1)
+	require.Contains(t, rt.ListPeers(), p2)
 
 	// ensure we have 1 candidate
 	rt.cplReplacementCache.Lock()
-	require.NotNil(t, rt.cplReplacementCache.candidates[uint(0)])
-	require.True(t, len(rt.cplReplacementCache.candidates[uint(0)]) == 1)
+	require.Len(t, rt.cplReplacementCache.candidates[uint(0)], 1)
+	require.Contains(t, rt.cplReplacementCache.candidates[uint(0)], candidate)
 	rt.cplReplacementCache.Unlock()
 
-	// mark a peer as dead and ensure it's not in the RT
-	require.NotEmpty(t, rt.Find(peers[0]))
-	rt.HandlePeerDead(peers[0])
-	require.Empty(t, rt.Find(peers[0]))
-
-	// mark the peer as dead & verify we don't get it as a candidate
-	rt.HandlePeerDead(peers[2])
-
+	// mark a peer as dead and ensure it's not in the RT & it gets replaced
+	require.NotEmpty(t, rt.Find(p1))
+	rt.HandlePeerDead(p1)
+	require.Empty(t, rt.Find(p1))
+	time.Sleep(1 * time.Second)
 	rt.cplReplacementCache.Lock()
-	require.Nil(t, rt.cplReplacementCache.candidates[uint(0)])
+	require.Empty(t, rt.cplReplacementCache.candidates)
 	rt.cplReplacementCache.Unlock()
+	lk.Lock()
+	require.Equal(t, candidate, added)
+	lk.Unlock()
 }
 
 func TestTableCallbacks(t *testing.T) {
@@ -593,7 +613,6 @@ func TestTableCleanup(t *testing.T) {
 			p := test.RandPeerIDFatal(t)
 			if CommonPrefixLen(ConvertPeerID(local), ConvertPeerID(p)) == cpl {
 				cplPeerMap[cpl] = append(cplPeerMap[cpl], p)
-
 				i++
 				if i == 6 {
 					break
@@ -634,7 +653,7 @@ func TestTableCleanup(t *testing.T) {
 		}
 	}
 
-	// validate current state
+	// validate current TABLE state
 	rt.tabLock.RLock()
 	require.Len(t, rt.ListPeers(), 6)
 	ps0 := rt.buckets[0].peerIds()
@@ -649,7 +668,14 @@ func TestTableCleanup(t *testing.T) {
 	require.Contains(t, ps1, cplPeerMap[1][2])
 	rt.tabLock.RUnlock()
 
-	// now disconnect peers 0 1 & 2 from both buckets so it has only 0 left after it gets validated
+	// validate current state of replacement cache
+	rt.cplReplacementCache.Lock()
+	require.Len(t, rt.cplReplacementCache.candidates, 2)
+	require.Len(t, rt.cplReplacementCache.candidates[0], 3)
+	require.Len(t, rt.cplReplacementCache.candidates[1], 3)
+	rt.cplReplacementCache.Unlock()
+
+	// now disconnect peers 0 1 & 2 from both buckets so it has only peer 1 left after it gets validated
 	for _, peers := range cplPeerMap {
 		rt.HandlePeerDisconnect(peers[0])
 		rt.HandlePeerDisconnect(peers[1])
@@ -657,7 +683,7 @@ func TestTableCleanup(t *testing.T) {
 	}
 
 	// let RT cleanup complete
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	// verify RT state
 	rt.tabLock.RLock()
@@ -670,7 +696,7 @@ func TestTableCleanup(t *testing.T) {
 	require.Contains(t, ps1, cplPeerMap[1][1])
 	rt.tabLock.RUnlock()
 
-	// verify candidate state
+	// verify peers were replaced with candidates
 	addedCandidatesLk.Lock()
 	require.Len(t, addedCandidates, 4)
 	require.Contains(t, addedCandidates, cplPeerMap[0][3])
@@ -678,6 +704,11 @@ func TestTableCleanup(t *testing.T) {
 	require.Contains(t, addedCandidates, cplPeerMap[1][3])
 	require.Contains(t, addedCandidates, cplPeerMap[1][5])
 	addedCandidatesLk.Unlock()
+
+	// verify candidates were removed from the replacement cache
+	rt.cplReplacementCache.Lock()
+	require.Empty(t, rt.cplReplacementCache.candidates)
+	rt.cplReplacementCache.Unlock()
 
 	// close RT
 	require.NoError(t, rt.Close())
