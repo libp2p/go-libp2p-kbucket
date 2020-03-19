@@ -142,72 +142,6 @@ func (rt *RoutingTable) Close() error {
 	return nil
 }
 
-func (rt *RoutingTable) cleanup() {
-	validatePeerF := func(p peer.ID) bool {
-		queryCtx, cancel := context.WithTimeout(rt.ctx, rt.peerValidationTimeout)
-		defer cancel()
-		return rt.peerValidationFnc(queryCtx, p)
-	}
-
-	cleanupTickr := time.NewTicker(rt.tableCleanupInterval)
-	defer cleanupTickr.Stop()
-	for {
-		select {
-		case <-cleanupTickr.C:
-			ps := rt.peersToValidate()
-			for _, pinfo := range ps {
-				// continue if we are able to successfully validate the peer
-				// it will be marked alive in the RT when the DHT connection notification handler calls RT.HandlePeerAlive()
-				// TODO Should we revisit this ? It makes more sense for the RT to mark it as active here
-				if validatePeerF(pinfo.Id) {
-					log.Infof("successfully validated missing peer=%s", pinfo.Id)
-					continue
-				}
-
-				// peer does not seem to be alive, let's try to replace it
-				log.Infof("failed to validate missing peer=%s, evicting it from the RT & requesting a replace", pinfo.Id)
-				// evict missing peer & request replacement
-				rt.HandlePeerDead(pinfo.Id)
-			}
-		case <-rt.ctx.Done():
-			return
-		}
-	}
-}
-
-// replaces a peer using a valid peer from the replacement cache
-func (rt *RoutingTable) startPeerReplacement() {
-	validatePeerF := func(p peer.ID) bool {
-		queryCtx, cancel := context.WithTimeout(rt.ctx, rt.peerValidationTimeout)
-		defer cancel()
-		return rt.peerValidationFnc(queryCtx, p)
-	}
-
-	for {
-		select {
-		case p := <-rt.peerReplaceCh:
-			// keep trying replacement candidates till we get a successful validation or
-			// we run out of candidates
-			cpl := uint(CommonPrefixLen(ConvertPeerID(p), rt.local))
-			c, notEmpty := rt.cplReplacementCache.pop(cpl)
-			for notEmpty {
-				if validatePeerF(c) {
-					log.Infof("successfully validated candidate=%s for peer=%s", c, p)
-					break
-				}
-				log.Infof("failed to validated candidate=%s", c)
-				c, notEmpty = rt.cplReplacementCache.pop(cpl)
-			}
-
-			if !notEmpty {
-				log.Infof("failed to replace missing peer=%s as all candidates were invalid", p)
-			}
-		case <-rt.ctx.Done():
-			return
-		}
-	}
-}
-
 // returns the peers that need to be validated.
 func (rt *RoutingTable) peersToValidate() []PeerInfo {
 	rt.tabLock.RLock()
@@ -323,6 +257,11 @@ func (rt *RoutingTable) HandlePeerAlive(p peer.ID) (evicted peer.ID, err error) 
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
 
+	return rt.addPeer(p)
+}
+
+// locking is the responsibility of the caller
+func (rt *RoutingTable) addPeer(p peer.ID) (evicted peer.ID, err error) {
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
 	if peer := bucket.getPeer(p); peer != nil {
@@ -368,9 +307,13 @@ func (rt *RoutingTable) HandlePeerAlive(p peer.ID) (evicted peer.ID, err error) 
 // It evicts the peer from the Routing Table and tries to replace it with a valid & eligible
 // candidate from the replacement cache.
 func (rt *RoutingTable) HandlePeerDead(p peer.ID) {
-	// remove it from the RT
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
+	rt.removePeer(p)
+}
+
+// locking is the responsibility of the caller
+func (rt *RoutingTable) removePeer(p peer.ID) {
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
 	if bucket.remove(p) {
@@ -501,12 +444,13 @@ func (rt *RoutingTable) Size() int {
 
 // ListPeers takes a RoutingTable and returns a list of all peers from all buckets in the table.
 func (rt *RoutingTable) ListPeers() []peer.ID {
-	var peers []peer.ID
 	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
+
+	var peers []peer.ID
 	for _, buck := range rt.buckets {
 		peers = append(peers, buck.peerIds()...)
 	}
-	rt.tabLock.RUnlock()
 	return peers
 }
 
