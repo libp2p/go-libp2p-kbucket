@@ -3,7 +3,6 @@ package kbucket
 import (
 	"context"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
@@ -175,15 +174,11 @@ func TestHandlePeerDead(t *testing.T) {
 		}
 	}
 
-	var lk sync.Mutex
-	var added peer.ID
 	f := func(ctx context.Context, p peer.ID) bool {
 		if p == candidate {
-			lk.Lock()
-			added = p
-			lk.Unlock()
+			return true
 		}
-		return true
+		return false
 	}
 
 	m := pstore.NewMetrics()
@@ -209,15 +204,15 @@ func TestHandlePeerDead(t *testing.T) {
 
 	// mark a peer as dead and ensure it's not in the RT & it gets replaced
 	require.NotEmpty(t, rt.Find(p1))
+	require.Empty(t, rt.Find(candidate))
 	rt.HandlePeerDead(p1)
 	require.Empty(t, rt.Find(p1))
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
+	require.NotEmpty(t, rt.Find(p2))
 	rt.cplReplacementCache.Lock()
 	require.Empty(t, rt.cplReplacementCache.candidates)
 	rt.cplReplacementCache.Unlock()
-	lk.Lock()
-	require.Equal(t, candidate, added)
-	lk.Unlock()
+	require.NotEmpty(t, rt.Find(candidate))
 }
 
 func TestTableCallbacks(t *testing.T) {
