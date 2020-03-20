@@ -31,9 +31,9 @@ func (rt *RoutingTable) cleanup() {
 					// add it back/mark it as active ONLY if it is still in the RT
 					// to avoid adding it back if it's been marked as dead
 					i := rt.bucketIdForPeer(pinfo.Id)
-					if rt.buckets[i].getPeer(pinfo.Id) != nil {
-						log.Infof("successfully validated missing peer=%s, marking it as active", pinfo.Id)
-						rt.addPeer(pinfo.Id)
+					if peer := rt.buckets[i].getPeer(pinfo.Id); peer != nil {
+						log.Debugf("successfully validated missing peer=%s, marking it as active", pinfo.Id)
+						peer.State = PeerStateActive
 					}
 					rt.tabLock.Unlock()
 					continue
@@ -46,7 +46,7 @@ func (rt *RoutingTable) cleanup() {
 				i := rt.bucketIdForPeer(pinfo.Id)
 				p := rt.buckets[i].getPeer(pinfo.Id)
 				if p != nil && p.State != PeerStateActive {
-					log.Infof("failed to validate missing peer=%s, evicting it from the RT & requesting a replace", pinfo.Id)
+					log.Debugf("failed to validate missing peer=%s, evicting it from the RT & requesting a replace", pinfo.Id)
 					rt.removePeer(pinfo.Id)
 				}
 				rt.tabLock.Unlock()
@@ -74,7 +74,7 @@ func (rt *RoutingTable) startPeerReplacement() {
 			c, notEmpty := rt.cplReplacementCache.pop(cpl)
 			for notEmpty {
 				if validatePeerF(c) {
-					log.Infof("successfully validated candidate=%s for peer=%s", c, p)
+					log.Debugf("successfully validated candidate=%s for peer=%s", c, p)
 					// TODO There is a race here. The peer could disconnect from us or stop supporting the DHT
 					// protocol after the validation which means we should not be adding it to the RT here.
 					// See https://github.com/libp2p/go-libp2p-kbucket/issues/60
@@ -83,12 +83,12 @@ func (rt *RoutingTable) startPeerReplacement() {
 					rt.tabLock.Unlock()
 					break
 				}
-				log.Infof("failed to validated candidate=%s", c)
+				log.Debugf("failed to validated candidate=%s", c)
 				c, notEmpty = rt.cplReplacementCache.pop(cpl)
 			}
 
 			if !notEmpty {
-				log.Infof("failed to replace missing peer=%s as all candidates were invalid", p)
+				log.Debugf("failed to replace missing peer=%s as all candidates were invalid", p)
 			}
 		case <-rt.ctx.Done():
 			return
