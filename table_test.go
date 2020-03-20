@@ -3,7 +3,6 @@ package kbucket
 import (
 	"context"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
@@ -167,37 +166,53 @@ func TestHandlePeerDead(t *testing.T) {
 	t.Parallel()
 
 	local := test.RandPeerIDFatal(t)
+	var candidate peer.ID
+	for {
+		candidate = test.RandPeerIDFatal(t)
+		if CommonPrefixLen(ConvertPeerID(candidate), ConvertPeerID(local)) == 0 {
+			break
+		}
+	}
+
+	f := func(ctx context.Context, p peer.ID) bool {
+		if p == candidate {
+			return true
+		}
+		return false
+	}
+
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(PeerAlwaysValidFnc))
+	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, PeerValidationFnc(f))
 	require.NoError(t, err)
 
-	// push 3 peers  -> 2 for the first bucket, and 1 as candidates
-	var peers []peer.ID
-	for i := 0; i < 3; i++ {
-		p, err := rt.GenRandPeerID(uint(0))
-		require.NoError(t, err)
-		require.NotEmpty(t, p)
-		rt.HandlePeerAlive(p)
-		peers = append(peers, p)
-	}
+	p1, _ := rt.GenRandPeerID(0)
+	p2, _ := rt.GenRandPeerID(0)
+	rt.HandlePeerAlive(p1)
+	rt.HandlePeerAlive(p2)
+	rt.HandlePeerAlive(candidate)
+
+	// ensure p1 & p2 are in the RT
+	require.Len(t, rt.ListPeers(), 2)
+	require.Contains(t, rt.ListPeers(), p1)
+	require.Contains(t, rt.ListPeers(), p2)
 
 	// ensure we have 1 candidate
 	rt.cplReplacementCache.Lock()
-	require.NotNil(t, rt.cplReplacementCache.candidates[uint(0)])
-	require.True(t, len(rt.cplReplacementCache.candidates[uint(0)]) == 1)
+	require.Len(t, rt.cplReplacementCache.candidates[uint(0)], 1)
+	require.Contains(t, rt.cplReplacementCache.candidates[uint(0)], candidate)
 	rt.cplReplacementCache.Unlock()
 
-	// mark a peer as dead and ensure it's not in the RT
-	require.NotEmpty(t, rt.Find(peers[0]))
-	rt.HandlePeerDead(peers[0])
-	require.Empty(t, rt.Find(peers[0]))
-
-	// mark the peer as dead & verify we don't get it as a candidate
-	rt.HandlePeerDead(peers[2])
-
+	// mark a peer as dead and ensure it's not in the RT & it gets replaced
+	require.NotEmpty(t, rt.Find(p1))
+	require.Empty(t, rt.Find(candidate))
+	rt.HandlePeerDead(p1)
+	require.Empty(t, rt.Find(p1))
+	time.Sleep(2 * time.Second)
+	require.NotEmpty(t, rt.Find(p2))
 	rt.cplReplacementCache.Lock()
-	require.Nil(t, rt.cplReplacementCache.candidates[uint(0)])
+	require.Empty(t, rt.cplReplacementCache.candidates)
 	rt.cplReplacementCache.Unlock()
+	require.NotEmpty(t, rt.Find(candidate))
 }
 
 func TestTableCallbacks(t *testing.T) {
@@ -576,111 +591,6 @@ func TestTableMultithreaded(t *testing.T) {
 	<-done
 	<-done
 	<-done
-}
-
-func TestTableCleanup(t *testing.T) {
-	t.Parallel()
-	local := test.RandPeerIDFatal(t)
-
-	// Generate:
-	// 6 peers with CPL 0
-	// 6 peers with CPL 1
-	cplPeerMap := make(map[int][]peer.ID)
-	for cpl := 0; cpl < 2; cpl++ {
-		i := 0
-
-		for {
-			p := test.RandPeerIDFatal(t)
-			if CommonPrefixLen(ConvertPeerID(local), ConvertPeerID(p)) == cpl {
-				cplPeerMap[cpl] = append(cplPeerMap[cpl], p)
-
-				i++
-				if i == 6 {
-					break
-				}
-			}
-		}
-	}
-
-	// mock peer validation fnc that successfully validates p[1], p[3] & p[5]
-	var addedCandidatesLk sync.Mutex
-	addedCandidates := make(map[peer.ID]struct{})
-	f := func(ctx context.Context, p peer.ID) bool {
-		cpl := CommonPrefixLen(ConvertPeerID(local), ConvertPeerID(p))
-		if cplPeerMap[cpl][1] == p || cplPeerMap[cpl][3] == p || cplPeerMap[cpl][5] == p {
-			// 1 is already in the RT, but 3 & 5 are candidates
-			if cplPeerMap[cpl][3] == p || cplPeerMap[cpl][5] == p {
-				addedCandidatesLk.Lock()
-				addedCandidates[p] = struct{}{}
-				addedCandidatesLk.Unlock()
-			}
-
-			return true
-		} else {
-			return false
-		}
-	}
-
-	// create RT with a very short cleanup interval
-	rt, err := NewRoutingTable(3, ConvertPeerID(local), time.Hour, pstore.NewMetrics(), PeerValidationFnc(f),
-		TableCleanupInterval(100*time.Millisecond))
-	require.NoError(t, err)
-
-	// for each CPL, p[0], p[1] & p[2] got the bucket & p[3], p[4] & p[5] become candidates
-	for _, peers := range cplPeerMap {
-		for _, p := range peers {
-			rt.HandlePeerAlive(p)
-
-		}
-	}
-
-	// validate current state
-	rt.tabLock.RLock()
-	require.Len(t, rt.ListPeers(), 6)
-	ps0 := rt.buckets[0].peerIds()
-	require.Len(t, ps0, 3)
-	ps1 := rt.buckets[1].peerIds()
-	require.Len(t, ps1, 3)
-	require.Contains(t, ps0, cplPeerMap[0][0])
-	require.Contains(t, ps0, cplPeerMap[0][1])
-	require.Contains(t, ps0, cplPeerMap[0][2])
-	require.Contains(t, ps1, cplPeerMap[1][0])
-	require.Contains(t, ps1, cplPeerMap[1][1])
-	require.Contains(t, ps1, cplPeerMap[1][2])
-	rt.tabLock.RUnlock()
-
-	// now disconnect peers 0 1 & 2 from both buckets so it has only 0 left after it gets validated
-	for _, peers := range cplPeerMap {
-		rt.HandlePeerDisconnect(peers[0])
-		rt.HandlePeerDisconnect(peers[1])
-		rt.HandlePeerDisconnect(peers[2])
-	}
-
-	// let RT cleanup complete
-	time.Sleep(1 * time.Second)
-
-	// verify RT state
-	rt.tabLock.RLock()
-	require.Len(t, rt.ListPeers(), 2)
-	ps0 = rt.buckets[0].peerIds()
-	require.Len(t, ps0, 1)
-	ps1 = rt.buckets[1].peerIds()
-	require.Len(t, ps1, 1)
-	require.Contains(t, ps0, cplPeerMap[0][1])
-	require.Contains(t, ps1, cplPeerMap[1][1])
-	rt.tabLock.RUnlock()
-
-	// verify candidate state
-	addedCandidatesLk.Lock()
-	require.Len(t, addedCandidates, 4)
-	require.Contains(t, addedCandidates, cplPeerMap[0][3])
-	require.Contains(t, addedCandidates, cplPeerMap[0][5])
-	require.Contains(t, addedCandidates, cplPeerMap[1][3])
-	require.Contains(t, addedCandidates, cplPeerMap[1][5])
-	addedCandidatesLk.Unlock()
-
-	// close RT
-	require.NoError(t, rt.Close())
 }
 
 func BenchmarkHandlePeerAlive(b *testing.B) {
