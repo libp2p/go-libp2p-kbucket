@@ -52,12 +52,12 @@ type RoutingTable struct {
 	// maxLastSuccessfulOutboundThreshold is the max threshold/upper limit for the value of "lastSuccessfulOutboundQuery"
 	// of the peer in the bucket above which we will evict it to make place for a new peer if the bucket
 	// is full
-	maxLastSuccessfulOutboundThreshold time.Duration
+	maxLastSuccessfulOutboundThreshold float64
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
 // Passing a nil PeerValidationFunc disables periodic table cleanup.
-func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics, maxLastSuccessfulOutboundThreshold time.Duration) (*RoutingTable, error) {
+func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics, maxLastSuccessfulOutboundThreshold float64) (*RoutingTable, error) {
 	rt := &RoutingTable{
 		buckets:    []*bucket{newBucket()},
 		bucketsize: bucketsize,
@@ -147,7 +147,7 @@ func (rt *RoutingTable) addPeer(p peer.ID) (bool, error) {
 	allPeers := bucket.peers()
 	for _, pc := range allPeers {
 		if !pc.lastSuccessfulOutboundQuery.IsZero() &&
-			time.Since(pc.lastSuccessfulOutboundQuery) > rt.maxLastSuccessfulOutboundThreshold {
+			float64(time.Since(pc.lastSuccessfulOutboundQuery)) > rt.maxLastSuccessfulOutboundThreshold {
 			// let's evict it and add the new peer
 			if bucket.remove(pc.Id) {
 				bucket.pushFront(&PeerInfo{Id: p})
