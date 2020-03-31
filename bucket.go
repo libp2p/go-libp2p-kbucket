@@ -4,23 +4,16 @@ package kbucket
 
 import (
 	"container/list"
+
 	"github.com/libp2p/go-libp2p-core/peer"
-)
-
-// PeerState is the state of the peer as seen by the Routing Table.
-type PeerState int
-
-const (
-	// PeerStateActive indicates that we know the peer is active/alive.
-	PeerStateActive PeerState = iota
-	// PeerStateMissing indicates that we do not know the state of the peer.
-	PeerStateMissing
 )
 
 // PeerInfo holds all related information for a peer in the K-Bucket.
 type PeerInfo struct {
-	Id    peer.ID
-	State PeerState
+	Id peer.ID
+	// usefulnessCounter is a time decaying metric we maintain for each peer
+	// which tells us if we need to keep the peer in the RT anymore.
+	usefulnessCounter float64
 }
 
 // bucket holds a list of peers.
