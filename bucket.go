@@ -4,6 +4,7 @@ package kbucket
 
 import (
 	"container/list"
+	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 )
@@ -11,9 +12,9 @@ import (
 // PeerInfo holds all related information for a peer in the K-Bucket.
 type PeerInfo struct {
 	Id peer.ID
-	// usefulnessCounter is a time decaying metric we maintain for each peer
-	// which tells us if we need to keep the peer in the RT anymore.
-	usefulnessCounter float64
+	// lastSuccessfulOutboundQuery is the time instant when we last made a successful
+	// outbound query to this peer
+	lastSuccessfulOutboundQuery time.Time
 }
 
 // bucket holds a list of peers.

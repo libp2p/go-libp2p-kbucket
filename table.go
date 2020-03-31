@@ -49,21 +49,15 @@ type RoutingTable struct {
 	PeerRemoved func(peer.ID)
 	PeerAdded   func(peer.ID)
 
-	// Usefulness Counter Time Decay
-	defaultUsefulnessCounter float64
-	usefulnessMinThreshold   float64
+	// maxLastSuccessfulOutboundThreshold is the max threshold/upper limit for the value of "lastSuccessfulOutboundQuery"
+	// of the peer in the bucket above which we will evict it to make place for a new peer if the bucket
+	// is full
+	maxLastSuccessfulOutboundThreshold time.Duration
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
 // Passing a nil PeerValidationFunc disables periodic table cleanup.
-func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics,
-	opts ...Option) (*RoutingTable, error) {
-
-	var cfg options
-	if err := cfg.apply(append([]Option{Defaults}, opts...)...); err != nil {
-		return nil, err
-	}
-
+func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics, maxLastSuccessfulOutboundThreshold time.Duration) (*RoutingTable, error) {
 	rt := &RoutingTable{
 		buckets:    []*bucket{newBucket()},
 		bucketsize: bucketsize,
@@ -77,8 +71,7 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 		PeerRemoved: func(peer.ID) {},
 		PeerAdded:   func(peer.ID) {},
 
-		defaultUsefulnessCounter: cfg.usefulnessCounter.defaultValue,
-		usefulnessMinThreshold:   cfg.usefulnessCounter.minThreshold,
+		maxLastSuccessfulOutboundThreshold: maxLastSuccessfulOutboundThreshold,
 	}
 
 	rt.ctx, rt.ctxCancel = context.WithCancel(context.Background())
@@ -93,11 +86,10 @@ func (rt *RoutingTable) Close() error {
 	return nil
 }
 
-// TryAddPeer tries to add a peer to the Routing table and sets it's usefulnessCounter to the default value
-// if it's newly added to the Routing Table.  If the peer ALREADY exists in the Routing Table, this call is a no-op.
+// TryAddPeer tries to add a peer to the Routing table. If the peer ALREADY exists in the Routing Table, this call is a no-op.
 //
-// If the logical bucket to which the peer belongs to is full and it's not the last bucket, we try to replace an existing peer
-// with a usefulness counter below the required minimum threshold in that bucket with the new peer.
+// If the logical bucket to which the peer belongs is full and it's not the last bucket, we try to replace an existing peer
+// whose lastSuccessfulOutboundQuery is below the required minimum threshold in that bucket with the new peer.
 // If no such peer exists in that bucket, we do NOT add the peer to the Routing Table and return error "ErrPeerRejectedNoCapacity".
 
 // It returns a boolean value set to true if the peer was newly added to the Routing Table, false otherwise.
@@ -130,7 +122,7 @@ func (rt *RoutingTable) addPeer(p peer.ID) (bool, error) {
 
 	// We have enough space in the bucket (whether spawned or grouped).
 	if bucket.len() < rt.bucketsize {
-		bucket.pushFront(&PeerInfo{p, rt.defaultUsefulnessCounter})
+		bucket.pushFront(&PeerInfo{Id: p})
 		rt.PeerAdded(p)
 		return true, nil
 	}
@@ -144,20 +136,21 @@ func (rt *RoutingTable) addPeer(p peer.ID) (bool, error) {
 
 		// push the peer only if the bucket isn't overflowing after slitting
 		if bucket.len() < rt.bucketsize {
-			bucket.pushFront(&PeerInfo{p, rt.defaultUsefulnessCounter})
+			bucket.pushFront(&PeerInfo{Id: p})
 			rt.PeerAdded(p)
 			return true, nil
 		}
 	}
 
 	// the bucket to which the peer belongs is full. Let's try to find a peer
-	// in that bucket with a usefulness counter value below the minimum threshold and replace it.
+	// in that bucket with a lastSuccessfulOutboundQuery value above the maximum threshold and replace it.
 	allPeers := bucket.peers()
 	for _, pc := range allPeers {
-		if pc.usefulnessCounter < rt.usefulnessMinThreshold {
+		if !pc.lastSuccessfulOutboundQuery.IsZero() &&
+			time.Since(pc.lastSuccessfulOutboundQuery) > rt.maxLastSuccessfulOutboundThreshold {
 			// let's evict it and add the new peer
 			if bucket.remove(pc.Id) {
-				bucket.pushFront(&PeerInfo{p, rt.defaultUsefulnessCounter})
+				bucket.pushFront(&PeerInfo{Id: p})
 				rt.PeerAdded(p)
 				return true, nil
 			}
@@ -167,18 +160,20 @@ func (rt *RoutingTable) addPeer(p peer.ID) (bool, error) {
 	return false, ErrPeerRejectedNoCapacity
 }
 
-// IncrementUsefulnessCounter increments the usefulness counter associated with the peer.
-func (rt *RoutingTable) IncrementUsefulnessCounter(p peer.ID) {
+// UpdateLastSuccessfulOutboundQuery updates the lastSuccessfulOutboundQuery time of the peer
+// Returns true if the update was successful, false otherwise.
+func (rt *RoutingTable) UpdateLastSuccessfulOutboundQuery(p peer.ID, t time.Time) bool {
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
 
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
 
-	// peer already exists in the Routing Table.
-	if peer := bucket.getPeer(p); peer != nil {
-		peer.usefulnessCounter = peer.usefulnessCounter + 1
+	if pc := bucket.getPeer(p); pc != nil {
+		pc.lastSuccessfulOutboundQuery = t
+		return true
 	}
+	return false
 }
 
 // RemovePeer should be called when the caller is sure that a peer is not useful for queries.
