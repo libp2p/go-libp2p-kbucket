@@ -33,7 +33,7 @@ func TestBucket(t *testing.T) {
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 100; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
-		b.pushFront(&peerInfo{peers[i], testTime1, ConvertPeerID(peers[i])})
+		b.pushFront(&PeerInfo{peers[i], testTime1, ConvertPeerID(peers[i])})
 	}
 
 	local := test.RandPeerIDFatal(t)
@@ -59,7 +59,7 @@ func TestBucket(t *testing.T) {
 	spl := b.split(0, ConvertPeerID(local))
 	llist := b.list
 	for e := llist.Front(); e != nil; e = e.Next() {
-		p := ConvertPeerID(e.Value.(*peerInfo).Id)
+		p := ConvertPeerID(e.Value.(*PeerInfo).Id)
 		cpl := CommonPrefixLen(p, localID)
 		if cpl > 0 {
 			t.Fatalf("split failed. found id with cpl > 0 in 0 bucket")
@@ -68,7 +68,7 @@ func TestBucket(t *testing.T) {
 
 	rlist := spl.list
 	for e := rlist.Front(); e != nil; e = e.Next() {
-		p := ConvertPeerID(e.Value.(*peerInfo).Id)
+		p := ConvertPeerID(e.Value.(*PeerInfo).Id)
 		cpl := CommonPrefixLen(p, localID)
 		if cpl == 0 {
 			t.Fatalf("split failed. found id with cpl == 0 in non 0 bucket")
@@ -478,6 +478,37 @@ func TestTableMultithreaded(t *testing.T) {
 	<-done
 	<-done
 	<-done
+}
+
+func TestGetPeerInfos(t *testing.T) {
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	require.NoError(t, err)
+
+	require.Empty(t, rt.GetPeerInfos())
+
+	p1 := test.RandPeerIDFatal(t)
+	p2 := test.RandPeerIDFatal(t)
+
+	b, err := rt.TryAddPeer(p1, false)
+	require.True(t, b)
+	require.NoError(t, err)
+	b, err = rt.TryAddPeer(p2, true)
+	require.True(t, b)
+	require.NoError(t, err)
+
+	ps := rt.GetPeerInfos()
+	require.Len(t, ps, 2)
+	ms := make(map[peer.ID]PeerInfo)
+	for _, p := range ps {
+		ms[p.Id] = p
+	}
+
+	require.Equal(t, p1, ms[p1].Id)
+	require.True(t, ms[p1].lastSuccessfulOutboundQuery.IsZero())
+	require.Equal(t, p2, ms[p2].Id)
+	require.False(t, ms[p2].lastSuccessfulOutboundQuery.IsZero())
 }
 
 func BenchmarkAddPeer(b *testing.B) {
