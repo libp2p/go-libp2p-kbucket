@@ -261,18 +261,18 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 	// Add peers from the target bucket (cpl+1 shared bits).
 	pds.appendPeersFromList(rt.buckets[cpl].list)
 
-	// If we're short, add peers from buckets to the right until we have
-	// enough. All buckets to the right share exactly cpl bits (as opposed
-	// to the cpl+1 bits shared by the peers in the cpl bucket).
+	// If we're short, add peers from all buckets to the right. All buckets
+	// to the right share exactly cpl bits (as opposed to the cpl+1 bits
+	// shared by the peers in the cpl bucket).
 	//
-	// Unfortunately, to be completely correct, we can't just take from
-	// buckets until we have enough peers because peers because _all_ of
-	// these peers will be ~2**(256-cpl) from us.
-	//
-	// However, we're going to do that anyways as it's "good enough"
+	// This is, unfortunately, less efficient than we'd like. We will switch
+	// to a trie implementation eventually which will allow us to find the
+	// closest N peers to any target key.
 
-	for i := cpl + 1; i < len(rt.buckets) && pds.Len() < count; i++ {
-		pds.appendPeersFromList(rt.buckets[i].list)
+	if pds.Len() < count {
+		for i := cpl + 1; i < len(rt.buckets); i++ {
+			pds.appendPeersFromList(rt.buckets[i].list)
+		}
 	}
 
 	// If we're still short, add in buckets that share _fewer_ bits. We can
