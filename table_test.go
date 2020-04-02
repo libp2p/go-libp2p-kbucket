@@ -85,10 +85,10 @@ func TestRemovePeer(t *testing.T) {
 
 	p1, _ := rt.GenRandPeerID(0)
 	p2, _ := rt.GenRandPeerID(0)
-	b, err := rt.TryAddPeer(p1)
+	b, err := rt.TryAddPeer(p1, true)
 	require.True(t, b)
 	require.NoError(t, err)
-	b, err = rt.TryAddPeer(p2)
+	b, err = rt.TryAddPeer(p2, true)
 	require.True(t, b)
 	require.NoError(t, err)
 
@@ -125,7 +125,7 @@ func TestTableCallbacks(t *testing.T) {
 		delete(pset, p)
 	}
 
-	rt.TryAddPeer(peers[0])
+	rt.TryAddPeer(peers[0], true)
 	if _, ok := pset[peers[0]]; !ok {
 		t.Fatal("should have this peer")
 	}
@@ -136,7 +136,7 @@ func TestTableCallbacks(t *testing.T) {
 	}
 
 	for _, p := range peers {
-		rt.TryAddPeer(p)
+		rt.TryAddPeer(p, true)
 	}
 
 	out := rt.ListPeers()
@@ -153,7 +153,7 @@ func TestTableCallbacks(t *testing.T) {
 }
 
 // Right now, this just makes sure that it doesnt hang or crash
-func TestHandlePeerAliveLoad(t *testing.T) {
+func TestTryAddPeerLoad(t *testing.T) {
 	t.Parallel()
 
 	local := test.RandPeerIDFatal(t)
@@ -166,9 +166,8 @@ func TestHandlePeerAliveLoad(t *testing.T) {
 		peers[i] = test.RandPeerIDFatal(t)
 	}
 
-	// Testing HandlePeerAlive
 	for i := 0; i < 10000; i++ {
-		rt.TryAddPeer(peers[rand.Intn(len(peers))])
+		rt.TryAddPeer(peers[rand.Intn(len(peers))], true)
 	}
 
 	for i := 0; i < 100; i++ {
@@ -191,7 +190,7 @@ func TestTableFind(t *testing.T) {
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 5; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
-		rt.TryAddPeer(peers[i])
+		rt.TryAddPeer(peers[i], true)
 	}
 
 	t.Logf("Searching for peer: '%s'", peers[2])
@@ -208,7 +207,7 @@ func TestUpdateLastSuccessfulOutboundQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	p := test.RandPeerIDFatal(t)
-	b, err := rt.TryAddPeer(p)
+	b, err := rt.TryAddPeer(p, true)
 	require.True(t, b)
 	require.NoError(t, err)
 
@@ -222,7 +221,7 @@ func TestUpdateLastSuccessfulOutboundQuery(t *testing.T) {
 	rt.tabLock.Unlock()
 }
 
-func TestHandlePeerAlive(t *testing.T) {
+func TestTryAddPeer(t *testing.T) {
 	minThreshold := float64(24 * 1 * time.Hour)
 	t.Parallel()
 
@@ -233,11 +232,11 @@ func TestHandlePeerAlive(t *testing.T) {
 
 	// generate 2 peers to saturate the first bucket for cpl=0
 	p1, _ := rt.GenRandPeerID(0)
-	b, err := rt.TryAddPeer(p1)
+	b, err := rt.TryAddPeer(p1, true)
 	require.NoError(t, err)
 	require.True(t, b)
 	p2, _ := rt.GenRandPeerID(0)
-	b, err = rt.TryAddPeer(p2)
+	b, err = rt.TryAddPeer(p2, true)
 	require.NoError(t, err)
 	require.True(t, b)
 	require.Equal(t, p1, rt.Find(p1))
@@ -245,14 +244,14 @@ func TestHandlePeerAlive(t *testing.T) {
 
 	// trying to add a peer with cpl=0 fails
 	p3, _ := rt.GenRandPeerID(0)
-	b, err = rt.TryAddPeer(p3)
+	b, err = rt.TryAddPeer(p3, true)
 	require.Equal(t, ErrPeerRejectedNoCapacity, err)
 	require.False(t, b)
 	require.Empty(t, rt.Find(p3))
 
 	// however, trying to add peer with cpl=1 works
 	p4, _ := rt.GenRandPeerID(1)
-	b, err = rt.TryAddPeer(p4)
+	b, err = rt.TryAddPeer(p4, true)
 	require.NoError(t, err)
 	require.True(t, b)
 	require.Equal(t, p4, rt.Find(p4))
@@ -260,7 +259,7 @@ func TestHandlePeerAlive(t *testing.T) {
 	// adding a peer with cpl 0 works if an existing peer has lastSuccessfulOutboundQuery above the max threshold
 	// because that existing peer will get replaced
 	require.True(t, rt.UpdateLastSuccessfulOutboundQuery(p2, time.Now().AddDate(0, 0, -1)))
-	b, err = rt.TryAddPeer(p3)
+	b, err = rt.TryAddPeer(p3, true)
 	require.NoError(t, err)
 	require.True(t, b)
 	require.Equal(t, p3, rt.Find(p3))
@@ -272,9 +271,22 @@ func TestHandlePeerAlive(t *testing.T) {
 	p5, err := rt.GenRandPeerID(0)
 	require.NoError(t, err)
 	require.True(t, rt.UpdateLastSuccessfulOutboundQuery(p1, time.Now()))
-	b, err = rt.TryAddPeer(p5)
+	b, err = rt.TryAddPeer(p5, true)
 	require.Error(t, err)
 	require.False(t, b)
+
+	// adding non query peer
+	p6, err := rt.GenRandPeerID(3)
+	require.NoError(t, err)
+	b, err = rt.TryAddPeer(p6, false)
+	require.NoError(t, err)
+	require.True(t, b)
+	rt.tabLock.Lock()
+	pi := rt.buckets[rt.bucketIdForPeer(p6)].getPeer(p6)
+	require.NotNil(t, p6)
+	require.True(t, pi.lastSuccessfulOutboundQuery.IsZero())
+	rt.tabLock.Unlock()
+
 }
 
 func TestTableFindMultiple(t *testing.T) {
@@ -288,7 +300,7 @@ func TestTableFindMultiple(t *testing.T) {
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 18; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
-		rt.TryAddPeer(peers[i])
+		rt.TryAddPeer(peers[i], true)
 	}
 
 	t.Logf("Searching for peer: '%s'", peers[2])
@@ -323,7 +335,7 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 100; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
-		rt.TryAddPeer(peers[i])
+		rt.TryAddPeer(peers[i], true)
 	}
 
 	targetID := ConvertPeerID(peers[2])
@@ -442,7 +454,7 @@ func TestTableMultithreaded(t *testing.T) {
 	go func() {
 		for i := 0; i < 1000; i++ {
 			n := rand.Intn(len(peers))
-			tab.TryAddPeer(peers[n])
+			tab.TryAddPeer(peers[n], true)
 		}
 		done <- struct{}{}
 	}()
@@ -450,7 +462,7 @@ func TestTableMultithreaded(t *testing.T) {
 	go func() {
 		for i := 0; i < 1000; i++ {
 			n := rand.Intn(len(peers))
-			tab.TryAddPeer(peers[n])
+			tab.TryAddPeer(peers[n], true)
 		}
 		done <- struct{}{}
 	}()
@@ -467,7 +479,7 @@ func TestTableMultithreaded(t *testing.T) {
 	<-done
 }
 
-func BenchmarkHandlePeerAlive(b *testing.B) {
+func BenchmarkAddPeer(b *testing.B) {
 	b.StopTimer()
 	local := ConvertKey("localKey")
 	m := pstore.NewMetrics()
@@ -481,7 +493,7 @@ func BenchmarkHandlePeerAlive(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		tab.TryAddPeer(peers[i])
+		tab.TryAddPeer(peers[i], true)
 	}
 }
 
@@ -495,7 +507,7 @@ func BenchmarkFinds(b *testing.B) {
 	var peers []peer.ID
 	for i := 0; i < b.N; i++ {
 		peers = append(peers, test.RandPeerIDFatal(b))
-		tab.TryAddPeer(peers[i])
+		tab.TryAddPeer(peers[i], true)
 	}
 
 	b.StartTimer()

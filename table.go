@@ -87,6 +87,9 @@ func (rt *RoutingTable) Close() error {
 }
 
 // TryAddPeer tries to add a peer to the Routing table. If the peer ALREADY exists in the Routing Table, this call is a no-op.
+// If the peer is a queryPeer i.e. we queried it or it queried us, we set the lastSuccessfulOutboundQuery to the current time.
+// If the peer is just a peer that we connect to/it connected to us without any DHT query, we consider it as having
+// no lastSuccessfulOutboundQuery.
 //
 // If the logical bucket to which the peer belongs is full and it's not the last bucket, we try to replace an existing peer
 // whose lastSuccessfulOutboundQuery is above the maximum allowed threshold in that bucket with the new peer.
@@ -97,17 +100,21 @@ func (rt *RoutingTable) Close() error {
 // the boolean value will ALWAYS be false i.e. the peer wont be added to the Routing Table it it's not already there.
 //
 // A return value of false with error=nil indicates that the peer ALREADY exists in the Routing Table.
-func (rt *RoutingTable) TryAddPeer(p peer.ID) (bool, error) {
+func (rt *RoutingTable) TryAddPeer(p peer.ID, queryPeer bool) (bool, error) {
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
 
-	return rt.addPeer(p)
+	return rt.addPeer(p, queryPeer)
 }
 
 // locking is the responsibility of the caller
-func (rt *RoutingTable) addPeer(p peer.ID) (bool, error) {
+func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
+	var lastSuccessfulOutboundQuery time.Time
+	if queryPeer {
+		lastSuccessfulOutboundQuery = time.Now()
+	}
 
 	// peer already exists in the Routing Table.
 	if peer := bucket.getPeer(p); peer != nil {
@@ -122,7 +129,7 @@ func (rt *RoutingTable) addPeer(p peer.ID) (bool, error) {
 
 	// We have enough space in the bucket (whether spawned or grouped).
 	if bucket.len() < rt.bucketsize {
-		bucket.pushFront(&PeerInfo{p, time.Now()})
+		bucket.pushFront(&PeerInfo{p, lastSuccessfulOutboundQuery})
 		rt.PeerAdded(p)
 		return true, nil
 	}
@@ -136,7 +143,7 @@ func (rt *RoutingTable) addPeer(p peer.ID) (bool, error) {
 
 		// push the peer only if the bucket isn't overflowing after slitting
 		if bucket.len() < rt.bucketsize {
-			bucket.pushFront(&PeerInfo{p, time.Now()})
+			bucket.pushFront(&PeerInfo{p, lastSuccessfulOutboundQuery})
 			rt.PeerAdded(p)
 			return true, nil
 		}
@@ -149,7 +156,7 @@ func (rt *RoutingTable) addPeer(p peer.ID) (bool, error) {
 		if float64(time.Since(pc.lastSuccessfulOutboundQuery)) > rt.maxLastSuccessfulOutboundThreshold {
 			// let's evict it and add the new peer
 			if bucket.remove(pc.Id) {
-				bucket.pushFront(&PeerInfo{p, time.Now()})
+				bucket.pushFront(&PeerInfo{p, lastSuccessfulOutboundQuery})
 				rt.PeerAdded(p)
 				return true, nil
 			}
