@@ -47,14 +47,14 @@ func TestBucket(t *testing.T) {
 	require.NotNil(t, p)
 	require.Equal(t, peers[i], p.Id)
 	require.Equal(t, ConvertPeerID(peers[i]), p.dhtId)
-	require.EqualValues(t, testTime1, p.lastSuccessfulOutboundQuery)
+	require.EqualValues(t, testTime1, p.LastSuccessfulOutboundQuery)
 
 	// mark as missing
 	t2 := time.Now().Add(1 * time.Hour)
-	p.lastSuccessfulOutboundQuery = t2
+	p.LastSuccessfulOutboundQuery = t2
 	p = b.getPeer(peers[i])
 	require.NotNil(t, p)
-	require.EqualValues(t, t2, p.lastSuccessfulOutboundQuery)
+	require.EqualValues(t, t2, p.LastSuccessfulOutboundQuery)
 
 	spl := b.split(0, ConvertPeerID(local))
 	llist := b.list
@@ -218,7 +218,7 @@ func TestUpdateLastSuccessfulOutboundQuery(t *testing.T) {
 	rt.tabLock.Lock()
 	pi := rt.buckets[0].getPeer(p)
 	require.NotNil(t, pi)
-	require.EqualValues(t, t2, pi.lastSuccessfulOutboundQuery)
+	require.EqualValues(t, t2, pi.LastSuccessfulOutboundQuery)
 	rt.tabLock.Unlock()
 }
 
@@ -257,7 +257,7 @@ func TestTryAddPeer(t *testing.T) {
 	require.True(t, b)
 	require.Equal(t, p4, rt.Find(p4))
 
-	// adding a peer with cpl 0 works if an existing peer has lastSuccessfulOutboundQuery above the max threshold
+	// adding a peer with cpl 0 works if an existing peer has LastSuccessfulOutboundQuery above the max threshold
 	// because that existing peer will get replaced
 	require.True(t, rt.UpdateLastSuccessfulOutboundQuery(p2, time.Now().AddDate(0, 0, -1)))
 	b, err = rt.TryAddPeer(p3, true)
@@ -285,7 +285,7 @@ func TestTryAddPeer(t *testing.T) {
 	rt.tabLock.Lock()
 	pi := rt.buckets[rt.bucketIdForPeer(p6)].getPeer(p6)
 	require.NotNil(t, p6)
-	require.True(t, pi.lastSuccessfulOutboundQuery.IsZero())
+	require.True(t, pi.LastSuccessfulOutboundQuery.IsZero())
 	rt.tabLock.Unlock()
 
 }
@@ -506,9 +506,9 @@ func TestGetPeerInfos(t *testing.T) {
 	}
 
 	require.Equal(t, p1, ms[p1].Id)
-	require.True(t, ms[p1].lastSuccessfulOutboundQuery.IsZero())
+	require.True(t, ms[p1].LastSuccessfulOutboundQuery.IsZero())
 	require.Equal(t, p2, ms[p2].Id)
-	require.False(t, ms[p2].lastSuccessfulOutboundQuery.IsZero())
+	require.False(t, ms[p2].LastSuccessfulOutboundQuery.IsZero())
 }
 
 func BenchmarkAddPeer(b *testing.B) {

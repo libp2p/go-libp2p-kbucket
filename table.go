@@ -49,7 +49,7 @@ type RoutingTable struct {
 	PeerRemoved func(peer.ID)
 	PeerAdded   func(peer.ID)
 
-	// maxLastSuccessfulOutboundThreshold is the max threshold/upper limit for the value of "lastSuccessfulOutboundQuery"
+	// maxLastSuccessfulOutboundThreshold is the max threshold/upper limit for the value of "LastSuccessfulOutboundQuery"
 	// of the peer in the bucket above which we will evict it to make place for a new peer if the bucket
 	// is full
 	maxLastSuccessfulOutboundThreshold float64
@@ -87,12 +87,12 @@ func (rt *RoutingTable) Close() error {
 }
 
 // TryAddPeer tries to add a peer to the Routing table. If the peer ALREADY exists in the Routing Table, this call is a no-op.
-// If the peer is a queryPeer i.e. we queried it or it queried us, we set the lastSuccessfulOutboundQuery to the current time.
+// If the peer is a queryPeer i.e. we queried it or it queried us, we set the LastSuccessfulOutboundQuery to the current time.
 // If the peer is just a peer that we connect to/it connected to us without any DHT query, we consider it as having
-// no lastSuccessfulOutboundQuery.
+// no LastSuccessfulOutboundQuery.
 //
 // If the logical bucket to which the peer belongs is full and it's not the last bucket, we try to replace an existing peer
-// whose lastSuccessfulOutboundQuery is above the maximum allowed threshold in that bucket with the new peer.
+// whose LastSuccessfulOutboundQuery is above the maximum allowed threshold in that bucket with the new peer.
 // If no such peer exists in that bucket, we do NOT add the peer to the Routing Table and return error "ErrPeerRejectedNoCapacity".
 
 // It returns a boolean value set to true if the peer was newly added to the Routing Table, false otherwise.
@@ -150,10 +150,10 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 	}
 
 	// the bucket to which the peer belongs is full. Let's try to find a peer
-	// in that bucket with a lastSuccessfulOutboundQuery value above the maximum threshold and replace it.
+	// in that bucket with a LastSuccessfulOutboundQuery value above the maximum threshold and replace it.
 	allPeers := bucket.peers()
 	for _, pc := range allPeers {
-		if float64(time.Since(pc.lastSuccessfulOutboundQuery)) > rt.maxLastSuccessfulOutboundThreshold {
+		if float64(time.Since(pc.LastSuccessfulOutboundQuery)) > rt.maxLastSuccessfulOutboundThreshold {
 			// let's evict it and add the new peer
 			if bucket.remove(pc.Id) {
 				bucket.pushFront(&PeerInfo{p, lastSuccessfulOutboundQuery, ConvertPeerID(p)})
@@ -180,7 +180,7 @@ func (rt *RoutingTable) GetPeerInfos() []PeerInfo {
 	return pis
 }
 
-// UpdateLastSuccessfulOutboundQuery updates the lastSuccessfulOutboundQuery time of the peer
+// UpdateLastSuccessfulOutboundQuery updates the LastSuccessfulOutboundQuery time of the peer
 // Returns true if the update was successful, false otherwise.
 func (rt *RoutingTable) UpdateLastSuccessfulOutboundQuery(p peer.ID, t time.Time) bool {
 	rt.tabLock.Lock()
@@ -190,7 +190,7 @@ func (rt *RoutingTable) UpdateLastSuccessfulOutboundQuery(p peer.ID, t time.Time
 	bucket := rt.buckets[bucketID]
 
 	if pc := bucket.getPeer(p); pc != nil {
-		pc.lastSuccessfulOutboundQuery = t
+		pc.LastSuccessfulOutboundQuery = t
 		return true
 	}
 	return false
