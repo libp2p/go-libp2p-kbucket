@@ -129,7 +129,7 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 
 	// We have enough space in the bucket (whether spawned or grouped).
 	if bucket.len() < rt.bucketsize {
-		bucket.pushFront(&PeerInfo{p, lastSuccessfulOutboundQuery})
+		bucket.pushFront(&peerInfo{p, lastSuccessfulOutboundQuery, ConvertPeerID(p)})
 		rt.PeerAdded(p)
 		return true, nil
 	}
@@ -143,7 +143,7 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 
 		// push the peer only if the bucket isn't overflowing after slitting
 		if bucket.len() < rt.bucketsize {
-			bucket.pushFront(&PeerInfo{p, lastSuccessfulOutboundQuery})
+			bucket.pushFront(&peerInfo{p, lastSuccessfulOutboundQuery, ConvertPeerID(p)})
 			rt.PeerAdded(p)
 			return true, nil
 		}
@@ -156,7 +156,7 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 		if float64(time.Since(pc.lastSuccessfulOutboundQuery)) > rt.maxLastSuccessfulOutboundThreshold {
 			// let's evict it and add the new peer
 			if bucket.remove(pc.Id) {
-				bucket.pushFront(&PeerInfo{p, lastSuccessfulOutboundQuery})
+				bucket.pushFront(&peerInfo{p, lastSuccessfulOutboundQuery, ConvertPeerID(p)})
 				rt.PeerAdded(p)
 				return true, nil
 			}
@@ -334,7 +334,7 @@ func (rt *RoutingTable) Print() {
 		fmt.Printf("\tbucket: %d\n", i)
 
 		for e := b.list.Front(); e != nil; e = e.Next() {
-			p := e.Value.(*PeerInfo).Id
+			p := e.Value.(*peerInfo).Id
 			fmt.Printf("\t\t- %s %s\n", p.Pretty(), rt.metrics.LatencyEWMA(p).String())
 		}
 	}
