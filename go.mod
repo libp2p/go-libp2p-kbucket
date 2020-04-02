@@ -3,7 +3,7 @@ module github.com/libp2p/go-libp2p-kbucket
 require (
 	github.com/ipfs/go-ipfs-util v0.0.1
 	github.com/ipfs/go-log v1.0.2
-	github.com/jbenet/goprocess v0.1.3
+	github.com/jbenet/goprocess v0.1.4
 	github.com/libp2p/go-libp2p-core v0.5.0
 	github.com/libp2p/go-libp2p-peerstore v0.2.2
 	github.com/minio/sha256-simd v0.1.1
