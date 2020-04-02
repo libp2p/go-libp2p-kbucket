@@ -89,7 +89,7 @@ func (rt *RoutingTable) Close() error {
 // TryAddPeer tries to add a peer to the Routing table. If the peer ALREADY exists in the Routing Table, this call is a no-op.
 //
 // If the logical bucket to which the peer belongs is full and it's not the last bucket, we try to replace an existing peer
-// whose lastSuccessfulOutboundQuery is below the required minimum threshold in that bucket with the new peer.
+// whose lastSuccessfulOutboundQuery is above the maximum allowed threshold in that bucket with the new peer.
 // If no such peer exists in that bucket, we do NOT add the peer to the Routing Table and return error "ErrPeerRejectedNoCapacity".
 
 // It returns a boolean value set to true if the peer was newly added to the Routing Table, false otherwise.
@@ -122,7 +122,7 @@ func (rt *RoutingTable) addPeer(p peer.ID) (bool, error) {
 
 	// We have enough space in the bucket (whether spawned or grouped).
 	if bucket.len() < rt.bucketsize {
-		bucket.pushFront(&PeerInfo{Id: p})
+		bucket.pushFront(&PeerInfo{p, time.Now()})
 		rt.PeerAdded(p)
 		return true, nil
 	}
@@ -136,7 +136,7 @@ func (rt *RoutingTable) addPeer(p peer.ID) (bool, error) {
 
 		// push the peer only if the bucket isn't overflowing after slitting
 		if bucket.len() < rt.bucketsize {
-			bucket.pushFront(&PeerInfo{Id: p})
+			bucket.pushFront(&PeerInfo{p, time.Now()})
 			rt.PeerAdded(p)
 			return true, nil
 		}
@@ -146,11 +146,10 @@ func (rt *RoutingTable) addPeer(p peer.ID) (bool, error) {
 	// in that bucket with a lastSuccessfulOutboundQuery value above the maximum threshold and replace it.
 	allPeers := bucket.peers()
 	for _, pc := range allPeers {
-		if !pc.lastSuccessfulOutboundQuery.IsZero() &&
-			float64(time.Since(pc.lastSuccessfulOutboundQuery)) > rt.maxLastSuccessfulOutboundThreshold {
+		if float64(time.Since(pc.lastSuccessfulOutboundQuery)) > rt.maxLastSuccessfulOutboundThreshold {
 			// let's evict it and add the new peer
 			if bucket.remove(pc.Id) {
-				bucket.pushFront(&PeerInfo{Id: p})
+				bucket.pushFront(&PeerInfo{p, time.Now()})
 				rt.PeerAdded(p)
 				return true, nil
 			}
