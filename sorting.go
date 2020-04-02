@@ -28,17 +28,17 @@ func (pds *peerDistanceSorter) Less(a, b int) bool {
 }
 
 // Append the peer.ID to the sorter's slice. It may no longer be sorted.
-func (pds *peerDistanceSorter) appendPeer(p peer.ID) {
+func (pds *peerDistanceSorter) appendPeer(p peer.ID, pDhtId ID) {
 	pds.peers = append(pds.peers, peerDistance{
 		p:        p,
-		distance: xor(pds.target, ConvertPeerID(p)),
+		distance: xor(pds.target, pDhtId),
 	})
 }
 
 // Append the peer.ID values in the list to the sorter's slice. It may no longer be sorted.
 func (pds *peerDistanceSorter) appendPeersFromList(l *list.List) {
 	for e := l.Front(); e != nil; e = e.Next() {
-		pds.appendPeer(e.Value.(*PeerInfo).Id)
+		pds.appendPeer(e.Value.(*peerInfo).Id, e.Value.(*peerInfo).dhtId)
 	}
 }
 
@@ -53,7 +53,7 @@ func SortClosestPeers(peers []peer.ID, target ID) []peer.ID {
 		target: target,
 	}
 	for _, p := range peers {
-		sorter.appendPeer(p)
+		sorter.appendPeer(p, ConvertPeerID(p))
 	}
 	sorter.sort()
 	out := make([]peer.ID, 0, sorter.Len())

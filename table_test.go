@@ -33,7 +33,7 @@ func TestBucket(t *testing.T) {
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 100; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
-		b.pushFront(&PeerInfo{peers[i], testTime1})
+		b.pushFront(&peerInfo{peers[i], testTime1, ConvertPeerID(peers[i])})
 	}
 
 	local := test.RandPeerIDFatal(t)
@@ -46,6 +46,7 @@ func TestBucket(t *testing.T) {
 	p := b.getPeer(peers[i])
 	require.NotNil(t, p)
 	require.Equal(t, peers[i], p.Id)
+	require.Equal(t, ConvertPeerID(peers[i]), p.dhtId)
 	require.EqualValues(t, testTime1, p.lastSuccessfulOutboundQuery)
 
 	// mark as missing
@@ -58,7 +59,7 @@ func TestBucket(t *testing.T) {
 	spl := b.split(0, ConvertPeerID(local))
 	llist := b.list
 	for e := llist.Front(); e != nil; e = e.Next() {
-		p := ConvertPeerID(e.Value.(*PeerInfo).Id)
+		p := ConvertPeerID(e.Value.(*peerInfo).Id)
 		cpl := CommonPrefixLen(p, localID)
 		if cpl > 0 {
 			t.Fatalf("split failed. found id with cpl > 0 in 0 bucket")
@@ -67,7 +68,7 @@ func TestBucket(t *testing.T) {
 
 	rlist := spl.list
 	for e := rlist.Front(); e != nil; e = e.Next() {
-		p := ConvertPeerID(e.Value.(*PeerInfo).Id)
+		p := ConvertPeerID(e.Value.(*peerInfo).Id)
 		cpl := CommonPrefixLen(p, localID)
 		if cpl == 0 {
 			t.Fatalf("split failed. found id with cpl == 0 in non 0 bucket")
