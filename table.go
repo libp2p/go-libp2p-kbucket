@@ -110,7 +110,7 @@ func (rt *RoutingTable) background() {
 		case <-tickr.C:
 			// get all peers in the routing table
 			rt.tabLock.RLock()
-			var peers []PeerInfo
+			var peers []peerInfo
 			for _, b := range rt.buckets {
 				peers = append(peers, b.peers()...)
 			}
