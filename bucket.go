@@ -9,12 +9,12 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-// peerInfo holds all related information for a peer in the K-Bucket.
-type peerInfo struct {
+// PeerInfo holds all related information for a peer in the K-Bucket.
+type PeerInfo struct {
 	Id peer.ID
-	// lastSuccessfulOutboundQuery is the time instant when we last made a successful
+	// LastSuccessfulOutboundQuery is the time instant when we last made a successful
 	// outbound query to this peer
-	lastSuccessfulOutboundQuery time.Time
+	LastSuccessfulOutboundQuery time.Time
 
 	// Id of the peer in the DHT XOR keyspace
 	dhtId ID
@@ -37,10 +37,10 @@ func newBucket() *bucket {
 
 // returns all peers in the bucket
 // it is safe for the caller to modify the returned objects as it is a defensive copy
-func (b *bucket) peers() []peerInfo {
-	var ps []peerInfo
+func (b *bucket) peers() []PeerInfo {
+	var ps []PeerInfo
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		p := e.Value.(*peerInfo)
+		p := e.Value.(*PeerInfo)
 		ps = append(ps, *p)
 	}
 	return ps
@@ -50,7 +50,7 @@ func (b *bucket) peers() []peerInfo {
 func (b *bucket) peerIds() []peer.ID {
 	ps := make([]peer.ID, 0, b.list.Len())
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		p := e.Value.(*peerInfo)
+		p := e.Value.(*PeerInfo)
 		ps = append(ps, p.Id)
 	}
 	return ps
@@ -58,10 +58,10 @@ func (b *bucket) peerIds() []peer.ID {
 
 // returns the peer with the given Id if it exists
 // returns nil if the peerId does not exist
-func (b *bucket) getPeer(p peer.ID) *peerInfo {
+func (b *bucket) getPeer(p peer.ID) *PeerInfo {
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		if e.Value.(*peerInfo).Id == p {
-			return e.Value.(*peerInfo)
+		if e.Value.(*PeerInfo).Id == p {
+			return e.Value.(*PeerInfo)
 		}
 	}
 	return nil
@@ -71,7 +71,7 @@ func (b *bucket) getPeer(p peer.ID) *peerInfo {
 // returns true if successful, false otherwise.
 func (b *bucket) remove(id peer.ID) bool {
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		if e.Value.(*peerInfo).Id == id {
+		if e.Value.(*PeerInfo).Id == id {
 			b.list.Remove(e)
 			return true
 		}
@@ -82,13 +82,13 @@ func (b *bucket) remove(id peer.ID) bool {
 func (b *bucket) moveToFront(id peer.ID) {
 
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		if e.Value.(*peerInfo).Id == id {
+		if e.Value.(*PeerInfo).Id == id {
 			b.list.MoveToFront(e)
 		}
 	}
 }
 
-func (b *bucket) pushFront(p *peerInfo) {
+func (b *bucket) pushFront(p *PeerInfo) {
 	b.list.PushFront(p)
 }
 
@@ -105,7 +105,7 @@ func (b *bucket) split(cpl int, target ID) *bucket {
 	newbuck.list = out
 	e := b.list.Front()
 	for e != nil {
-		pDhtId := e.Value.(*peerInfo).dhtId
+		pDhtId := e.Value.(*PeerInfo).dhtId
 		peerCPL := CommonPrefixLen(pDhtId, target)
 		if peerCPL > cpl {
 			cur := e
