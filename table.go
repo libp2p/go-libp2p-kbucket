@@ -19,6 +19,12 @@ var log = logging.Logger("table")
 var ErrPeerRejectedHighLatency = errors.New("peer rejected; latency too high")
 var ErrPeerRejectedNoCapacity = errors.New("peer rejected; insufficient capacity")
 
+// PeerPingFnc is the signature of a function that pings a peer in the Routing Table to determine it's liveliness.
+type PeerPingFnc func(ctx context.Context, p peer.ID) error
+
+// PeerConnectednessFnc simply checks if we are connected to a peer or not
+type PeerConnectednessFnc func(p peer.ID) bool
+
 // RoutingTable defines the routing table.
 type RoutingTable struct {
 	// the routing table context
@@ -53,11 +59,15 @@ type RoutingTable struct {
 	// of the peer in the bucket above which we will evict it to make place for a new peer if the bucket
 	// is full
 	maxLastSuccessfulOutboundThreshold float64
+	// the interval between two runs of the Routing table refresh by the DHT.
+	rtRefreshInterval    time.Duration
+	peerPingFnc          PeerPingFnc
+	peerConnectednessFnc PeerConnectednessFnc
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
-// Passing a nil PeerValidationFunc disables periodic table cleanup.
-func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics, maxLastSuccessfulOutboundThreshold float64) (*RoutingTable, error) {
+func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics, maxLastSuccessfulOutboundThreshold float64,
+	rtRefreshInterval time.Duration, peerPingFnc PeerPingFnc, peerConnectednessFnc PeerConnectednessFnc) (*RoutingTable, error) {
 	rt := &RoutingTable{
 		buckets:    []*bucket{newBucket()},
 		bucketsize: bucketsize,
@@ -72,11 +82,65 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 		PeerAdded:   func(peer.ID) {},
 
 		maxLastSuccessfulOutboundThreshold: maxLastSuccessfulOutboundThreshold,
+		rtRefreshInterval:                  rtRefreshInterval,
 	}
 
+	if peerPingFnc == nil {
+		return nil, errors.New("peerPing func is nil")
+	}
+	rt.peerPingFnc = peerPingFnc
+
+	if peerConnectednessFnc == nil {
+		return nil, errors.New("peerConnectednesss func is nil")
+	}
+	rt.peerConnectednessFnc = peerConnectednessFnc
+
 	rt.ctx, rt.ctxCancel = context.WithCancel(context.Background())
+	go rt.background()
 
 	return rt, nil
+}
+
+func (rt *RoutingTable) background() {
+	tickr := time.NewTicker(rt.rtRefreshInterval / 3)
+	defer tickr.Stop()
+
+	for {
+		select {
+		case <-tickr.C:
+			// get all peers in the routing table
+			rt.tabLock.RLock()
+			var peers []PeerInfo
+			for _, b := range rt.buckets {
+				peers = append(peers, b.peers()...)
+			}
+			rt.tabLock.RUnlock()
+
+			// start going through them
+			for _, ps := range peers {
+				// ping the peer if it's due for a ping and evict it if the ping fails
+				if time.Since(ps.lastSuccessfulOutboundQuery) > (rt.rtRefreshInterval / 3) {
+					livelinessCtx, cancel := context.WithTimeout(rt.ctx, 10*time.Second)
+					if err := rt.peerPingFnc(livelinessCtx, ps.Id); err != nil {
+						log.Debugf("failed to ping peer=%s, got error=%s, evicting it from the RT", ps.Id, err)
+						// below lock and connectedness check helps prevents the following race:
+						// we ping a peer and realize it's disconnected -> we somehow get a connection to the peer but after
+						// our ping and before we remove it from the RT -> which means rt.TryAdd() will not do anything ->
+						// we remove it from the RT thus losing a connected peer.
+						rt.tabLock.Lock()
+						if !rt.peerConnectednessFnc(ps.Id) {
+							rt.removePeer(ps.Id)
+						}
+						rt.tabLock.Unlock()
+					}
+					cancel()
+				}
+			}
+
+		case <-rt.ctx.Done():
+			return
+		}
+	}
 }
 
 // Close shuts down the Routing Table & all associated processes.
