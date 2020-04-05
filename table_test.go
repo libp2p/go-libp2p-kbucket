@@ -259,7 +259,7 @@ func TestTryAddPeer(t *testing.T) {
 
 	// adding a peer with cpl 0 works if an existing peer has LastSuccessfulOutboundQuery above the max threshold
 	// because that existing peer will get replaced
-	require.True(t, rt.UpdateLastSuccessfulOutboundQuery(p2, time.Now().AddDate(0, 0, -1)))
+	require.True(t, rt.UpdateLastSuccessfulOutboundQuery(p2, time.Now().AddDate(0, 0, -2)))
 	b, err = rt.TryAddPeer(p3, true)
 	require.NoError(t, err)
 	require.True(t, b)
