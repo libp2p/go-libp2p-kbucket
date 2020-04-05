@@ -44,6 +44,7 @@ func TestRefreshAndGetTrackedCpls(t *testing.T) {
 	for cpl := uint(0); cpl < maxCplForRefresh; cpl++ {
 		peerID, err := rt.GenRandPeerID(cpl)
 		require.NoError(t, err)
+		rt.TryAddPeer(peerID, false)
 		rt.ResetCplRefreshedAtForID(ConvertPeerID(peerID), time.Now())
 	}
 

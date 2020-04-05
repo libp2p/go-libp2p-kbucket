@@ -25,13 +25,20 @@ type CplRefresh struct {
 // GetTrackedCplsForRefresh returns the Cpl's we are tracking for refresh.
 // Caller is free to modify the returned slice as it is a defensive copy.
 func (rt *RoutingTable) GetTrackedCplsForRefresh() []CplRefresh {
+	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
 	rt.cplRefreshLk.RLock()
 	defer rt.cplRefreshLk.RUnlock()
 
 	cpls := make([]CplRefresh, 0, len(rt.cplRefreshedAt))
 
-	for c, t := range rt.cplRefreshedAt {
-		cpls = append(cpls, CplRefresh{c, t})
+	numBuckets := uint(len(rt.buckets))
+	for i := uint(0); i <= maxCplForRefresh && i < numBuckets; i++ {
+		if t, ok := rt.cplRefreshedAt[i]; ok {
+			cpls = append(cpls, CplRefresh{Cpl: i, LastRefreshAt: t})
+		} else {
+			cpls = append(cpls, CplRefresh{Cpl: i})
+		}
 	}
 
 	return cpls
