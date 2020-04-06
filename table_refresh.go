@@ -26,8 +26,8 @@ func (rt *RoutingTable) GetTrackedCplsForRefresh() []time.Time {
 	rt.cplRefreshLk.RLock()
 	defer rt.cplRefreshLk.RUnlock()
 
-	cpls := make([]time.Time, maxCommonPrefix)
-	for i := uint(0); i < maxCommonPrefix; i++ {
+	cpls := make([]time.Time, maxCommonPrefix+1)
+	for i := uint(0); i <= maxCommonPrefix; i++ {
 		// defaults to the zero value if we haven't refreshed it yet.
 		cpls[i] = rt.cplRefreshedAt[i]
 	}

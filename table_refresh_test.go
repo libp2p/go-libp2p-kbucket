@@ -51,7 +51,7 @@ func TestRefreshAndGetTrackedCpls(t *testing.T) {
 	// fetch cpl's
 	trackedCpls := rt.GetTrackedCplsForRefresh()
 	// should have nothing.
-	require.Len(t, trackedCpls, 0)
+	require.Len(t, trackedCpls, 1)
 
 	var peerIDs []peer.ID
 	for i := minCpl; i <= maxCpl; i++ {
@@ -65,18 +65,18 @@ func TestRefreshAndGetTrackedCpls(t *testing.T) {
 		added, err := rt.TryAddPeer(id, true)
 		require.NoError(t, err)
 		require.True(t, added)
-		require.Len(t, rt.GetTrackedCplsForRefresh(), minCpl+i)
+		require.Len(t, rt.GetTrackedCplsForRefresh(), minCpl+i+1)
 	}
 
 	// and remove down to the test CPL
 	for i := maxCpl; i > testCpl; i-- {
 		rt.RemovePeer(peerIDs[i-minCpl])
-		require.Len(t, rt.GetTrackedCplsForRefresh(), i-1)
+		require.Len(t, rt.GetTrackedCplsForRefresh(), i)
 	}
 
 	// should be tracking testCpl
 	trackedCpls = rt.GetTrackedCplsForRefresh()
-	require.Len(t, trackedCpls, testCpl)
+	require.Len(t, trackedCpls, testCpl+1)
 	// they should all be zero
 	for _, refresh := range trackedCpls {
 		require.True(t, refresh.IsZero(), "tracked cpl's should be zero")
@@ -89,7 +89,7 @@ func TestRefreshAndGetTrackedCpls(t *testing.T) {
 
 	// should be tracking the max
 	trackedCpls = rt.GetTrackedCplsForRefresh()
-	require.Len(t, trackedCpls, int(maxCplForRefresh))
+	require.Len(t, trackedCpls, int(maxCplForRefresh)+1)
 
 	// and not refreshed
 	for _, refresh := range trackedCpls {
@@ -102,7 +102,7 @@ func TestRefreshAndGetTrackedCpls(t *testing.T) {
 
 	// should still be tracking all buckets
 	trackedCpls = rt.GetTrackedCplsForRefresh()
-	require.Len(t, trackedCpls, int(maxCplForRefresh))
+	require.Len(t, trackedCpls, int(maxCplForRefresh)+1)
 
 	for i, refresh := range trackedCpls {
 		if i == testCpl {
