@@ -118,3 +118,16 @@ func (b *bucket) split(cpl int, target ID) *bucket {
 	}
 	return newbuck
 }
+
+// maxCommonPrefix returns the maximum common prefix length between any peer in
+// the bucket with the target ID.
+func (b *bucket) maxCommonPrefix(target ID) uint {
+	maxCpl := uint(0)
+	for e := b.list.Front(); e != nil; e = e.Next() {
+		cpl := uint(CommonPrefixLen(e.Value.(*PeerInfo).dhtId, target))
+		if cpl > maxCpl {
+			maxCpl = cpl
+		}
+	}
+	return maxCpl
+}

@@ -15,25 +15,22 @@ import (
 // This limit exists because we can only generate 'maxCplForRefresh' bit prefixes for now.
 const maxCplForRefresh uint = 15
 
-// CplRefresh contains a CPL(common prefix length) with the host & the last time
-// we refreshed that cpl/searched for an ID which has that cpl with the host.
-type CplRefresh struct {
-	Cpl           uint
-	LastRefreshAt time.Time
-}
-
 // GetTrackedCplsForRefresh returns the Cpl's we are tracking for refresh.
 // Caller is free to modify the returned slice as it is a defensive copy.
-func (rt *RoutingTable) GetTrackedCplsForRefresh() []CplRefresh {
+func (rt *RoutingTable) GetTrackedCplsForRefresh() []time.Time {
+	maxCommonPrefix := rt.maxCommonPrefix()
+	if maxCommonPrefix > maxCplForRefresh {
+		maxCommonPrefix = maxCplForRefresh
+	}
+
 	rt.cplRefreshLk.RLock()
 	defer rt.cplRefreshLk.RUnlock()
 
-	cpls := make([]CplRefresh, 0, len(rt.cplRefreshedAt))
-
-	for c, t := range rt.cplRefreshedAt {
-		cpls = append(cpls, CplRefresh{c, t})
+	cpls := make([]time.Time, maxCommonPrefix+1)
+	for i := uint(0); i <= maxCommonPrefix; i++ {
+		// defaults to the zero value if we haven't refreshed it yet.
+		cpls[i] = rt.cplRefreshedAt[i]
 	}
-
 	return cpls
 }
 
