@@ -12,9 +12,14 @@ import (
 // PeerInfo holds all related information for a peer in the K-Bucket.
 type PeerInfo struct {
 	Id peer.ID
-	// LastSuccessfulOutboundQuery is the time instant when we last made a successful
-	// outbound query to this peer
-	LastSuccessfulOutboundQuery time.Time
+
+	// LastUsefulAt is the time instant at which the peer was last "useful" to us.
+	// Please see the DHT docs for the definition of usefulness.
+	LastUsefulAt time.Time
+
+	// LastSuccessfulOutboundQueryAt is the time instant at which we last got a
+	// successful query response from the peer.
+	LastSuccessfulOutboundQueryAt time.Time
 
 	// Id of the peer in the DHT XOR keyspace
 	dhtId ID

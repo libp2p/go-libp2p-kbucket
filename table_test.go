@@ -27,13 +27,14 @@ func TestPrint(t *testing.T) {
 func TestBucket(t *testing.T) {
 	t.Parallel()
 	testTime1 := time.Now()
+	testTime2 := time.Now().AddDate(1, 0, 0)
 
 	b := newBucket()
 
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 100; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
-		b.pushFront(&PeerInfo{peers[i], testTime1, ConvertPeerID(peers[i])})
+		b.pushFront(&PeerInfo{peers[i], testTime1, testTime2, ConvertPeerID(peers[i])})
 	}
 
 	local := test.RandPeerIDFatal(t)
@@ -47,14 +48,17 @@ func TestBucket(t *testing.T) {
 	require.NotNil(t, p)
 	require.Equal(t, peers[i], p.Id)
 	require.Equal(t, ConvertPeerID(peers[i]), p.dhtId)
-	require.EqualValues(t, testTime1, p.LastSuccessfulOutboundQuery)
+	require.EqualValues(t, testTime1, p.LastUsefulAt)
+	require.EqualValues(t, testTime2, p.LastSuccessfulOutboundQueryAt)
 
-	// mark as missing
 	t2 := time.Now().Add(1 * time.Hour)
-	p.LastSuccessfulOutboundQuery = t2
+	t3 := t2.Add(1 * time.Hour)
+	p.LastSuccessfulOutboundQueryAt = t2
+	p.LastUsefulAt = t3
 	p = b.getPeer(peers[i])
 	require.NotNil(t, p)
-	require.EqualValues(t, t2, p.LastSuccessfulOutboundQuery)
+	require.EqualValues(t, t2, p.LastSuccessfulOutboundQueryAt)
+	require.EqualValues(t, t3, p.LastUsefulAt)
 
 	spl := b.split(0, ConvertPeerID(local))
 	llist := b.list
@@ -201,7 +205,7 @@ func TestTableFind(t *testing.T) {
 	}
 }
 
-func TestUpdateLastSuccessfulOutboundQuery(t *testing.T) {
+func TestUpdateLastSuccessfulOutboundQueryAt(t *testing.T) {
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
@@ -214,11 +218,32 @@ func TestUpdateLastSuccessfulOutboundQuery(t *testing.T) {
 
 	// increment and assert
 	t2 := time.Now().Add(1 * time.Hour)
-	rt.UpdateLastSuccessfulOutboundQuery(p, t2)
+	rt.UpdateLastSuccessfulOutboundQueryAt(p, t2)
 	rt.tabLock.Lock()
 	pi := rt.buckets[0].getPeer(p)
 	require.NotNil(t, pi)
-	require.EqualValues(t, t2, pi.LastSuccessfulOutboundQuery)
+	require.EqualValues(t, t2, pi.LastSuccessfulOutboundQueryAt)
+	rt.tabLock.Unlock()
+}
+
+func TestUpdateLastUsefulAt(t *testing.T) {
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	require.NoError(t, err)
+
+	p := test.RandPeerIDFatal(t)
+	b, err := rt.TryAddPeer(p, true)
+	require.True(t, b)
+	require.NoError(t, err)
+
+	// increment and assert
+	t2 := time.Now().Add(1 * time.Hour)
+	rt.UpdateLastUsefulAt(p, t2)
+	rt.tabLock.Lock()
+	pi := rt.buckets[0].getPeer(p)
+	require.NotNil(t, pi)
+	require.EqualValues(t, t2, pi.LastUsefulAt)
 	rt.tabLock.Unlock()
 }
 
@@ -257,9 +282,9 @@ func TestTryAddPeer(t *testing.T) {
 	require.True(t, b)
 	require.Equal(t, p4, rt.Find(p4))
 
-	// adding a peer with cpl 0 works if an existing peer has LastSuccessfulOutboundQuery above the max threshold
+	// adding a peer with cpl 0 works if an existing peer has LastUsefulAt above the max threshold
 	// because that existing peer will get replaced
-	require.True(t, rt.UpdateLastSuccessfulOutboundQuery(p2, time.Now().AddDate(0, 0, -2)))
+	require.True(t, rt.UpdateLastUsefulAt(p2, time.Now().AddDate(0, 0, -2)))
 	b, err = rt.TryAddPeer(p3, true)
 	require.NoError(t, err)
 	require.True(t, b)
@@ -271,7 +296,7 @@ func TestTryAddPeer(t *testing.T) {
 	// however adding peer fails if below threshold
 	p5, err := rt.GenRandPeerID(0)
 	require.NoError(t, err)
-	require.True(t, rt.UpdateLastSuccessfulOutboundQuery(p1, time.Now()))
+	require.True(t, rt.UpdateLastUsefulAt(p1, time.Now()))
 	b, err = rt.TryAddPeer(p5, true)
 	require.Error(t, err)
 	require.False(t, b)
@@ -285,7 +310,7 @@ func TestTryAddPeer(t *testing.T) {
 	rt.tabLock.Lock()
 	pi := rt.buckets[rt.bucketIdForPeer(p6)].getPeer(p6)
 	require.NotNil(t, p6)
-	require.True(t, pi.LastSuccessfulOutboundQuery.IsZero())
+	require.True(t, pi.LastUsefulAt.IsZero())
 	rt.tabLock.Unlock()
 
 }
@@ -425,9 +450,9 @@ func TestGetPeerInfos(t *testing.T) {
 	}
 
 	require.Equal(t, p1, ms[p1].Id)
-	require.True(t, ms[p1].LastSuccessfulOutboundQuery.IsZero())
+	require.True(t, ms[p1].LastUsefulAt.IsZero())
 	require.Equal(t, p2, ms[p2].Id)
-	require.False(t, ms[p2].LastSuccessfulOutboundQuery.IsZero())
+	require.False(t, ms[p2].LastUsefulAt.IsZero())
 }
 
 func BenchmarkAddPeer(b *testing.B) {
