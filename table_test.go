@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var NoOpThreshold = float64(100 * time.Hour)
+var NoOpThreshold = 100 * time.Hour
 
 func TestPrint(t *testing.T) {
 	t.Parallel()
@@ -248,7 +248,7 @@ func TestUpdateLastUsefulAt(t *testing.T) {
 }
 
 func TestTryAddPeer(t *testing.T) {
-	minThreshold := float64(24 * 1 * time.Hour)
+	minThreshold := 24 * 1 * time.Hour
 	t.Parallel()
 
 	local := test.RandPeerIDFatal(t)

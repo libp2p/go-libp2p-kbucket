@@ -50,13 +50,13 @@ type RoutingTable struct {
 	PeerAdded   func(peer.ID)
 
 	// usefulnessGracePeriod is the maximum grace period we will give to a
-	// peer in the bucket to be useful to us, failing which, we will evict it to make place for a new peer if the bucket
-	// is full
-	usefulnessGracePeriod float64
+	// peer in the bucket to be useful to us, failing which, we will evict
+	// it to make place for a new peer if the bucket is full
+	usefulnessGracePeriod time.Duration
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
-func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics, usefulnessGracePeriod float64) (*RoutingTable, error) {
+func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics, usefulnessGracePeriod time.Duration) (*RoutingTable, error) {
 	rt := &RoutingTable{
 		buckets:    []*bucket{newBucket()},
 		bucketsize: bucketsize,
@@ -154,7 +154,7 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 	// in that bucket with a LastSuccessfulOutboundQuery value above the maximum threshold and replace it.
 	allPeers := bucket.peers()
 	for _, pc := range allPeers {
-		if float64(time.Since(pc.LastUsefulAt)) > rt.usefulnessGracePeriod {
+		if time.Since(pc.LastUsefulAt) > rt.usefulnessGracePeriod {
 			// let's evict it and add the new peer
 			if bucket.remove(pc.Id) {
 				bucket.pushFront(&PeerInfo{Id: p, LastUsefulAt: lastUsefulAt, LastSuccessfulOutboundQueryAt: time.Now(),
