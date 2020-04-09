@@ -226,6 +226,27 @@ func TestUpdateLastSuccessfulOutboundQueryAt(t *testing.T) {
 	rt.tabLock.Unlock()
 }
 
+func TestUpdateLastUsefulAt(t *testing.T) {
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	require.NoError(t, err)
+
+	p := test.RandPeerIDFatal(t)
+	b, err := rt.TryAddPeer(p, true)
+	require.True(t, b)
+	require.NoError(t, err)
+
+	// increment and assert
+	t2 := time.Now().Add(1 * time.Hour)
+	rt.UpdateLastUsefulAt(p, t2)
+	rt.tabLock.Lock()
+	pi := rt.buckets[0].getPeer(p)
+	require.NotNil(t, pi)
+	require.EqualValues(t, t2, pi.LastUsefulAt)
+	rt.tabLock.Unlock()
+}
+
 func TestTryAddPeer(t *testing.T) {
 	minThreshold := float64(24 * 1 * time.Hour)
 	t.Parallel()
