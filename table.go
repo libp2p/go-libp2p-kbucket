@@ -49,15 +49,14 @@ type RoutingTable struct {
 	PeerRemoved func(peer.ID)
 	PeerAdded   func(peer.ID)
 
-	// maxLastSuccessfulOutboundThreshold is the max threshold/upper limit for the value of "LastSuccessfulOutboundQuery"
+	// maxLastUsefulAt is the max threshold/upper limit for the value of "LastUsefulAt"
 	// of the peer in the bucket above which we will evict it to make place for a new peer if the bucket
 	// is full
-	maxLastSuccessfulOutboundThreshold float64
+	maxLastUsefulAt float64
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
-// Passing a nil PeerValidationFunc disables periodic table cleanup.
-func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics, maxLastSuccessfulOutboundThreshold float64) (*RoutingTable, error) {
+func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics, maxLastUsefulAt float64) (*RoutingTable, error) {
 	rt := &RoutingTable{
 		buckets:    []*bucket{newBucket()},
 		bucketsize: bucketsize,
@@ -71,7 +70,7 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 		PeerRemoved: func(peer.ID) {},
 		PeerAdded:   func(peer.ID) {},
 
-		maxLastSuccessfulOutboundThreshold: maxLastSuccessfulOutboundThreshold,
+		maxLastUsefulAt: maxLastUsefulAt,
 	}
 
 	rt.ctx, rt.ctxCancel = context.WithCancel(context.Background())
@@ -111,9 +110,9 @@ func (rt *RoutingTable) TryAddPeer(p peer.ID, queryPeer bool) (bool, error) {
 func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
-	var lastSuccessfulOutboundQuery time.Time
+	var lastUsefulAt time.Time
 	if queryPeer {
-		lastSuccessfulOutboundQuery = time.Now()
+		lastUsefulAt = time.Now()
 	}
 
 	// peer already exists in the Routing Table.
@@ -129,7 +128,8 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 
 	// We have enough space in the bucket (whether spawned or grouped).
 	if bucket.len() < rt.bucketsize {
-		bucket.pushFront(&PeerInfo{p, lastSuccessfulOutboundQuery, ConvertPeerID(p)})
+		bucket.pushFront(&PeerInfo{Id: p, LastUsefulAt: lastUsefulAt, LastSuccessfulOutboundQueryAt: time.Now(),
+			dhtId: ConvertPeerID(p)})
 		rt.PeerAdded(p)
 		return true, nil
 	}
@@ -143,7 +143,8 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 
 		// push the peer only if the bucket isn't overflowing after slitting
 		if bucket.len() < rt.bucketsize {
-			bucket.pushFront(&PeerInfo{p, lastSuccessfulOutboundQuery, ConvertPeerID(p)})
+			bucket.pushFront(&PeerInfo{Id: p, LastUsefulAt: lastUsefulAt, LastSuccessfulOutboundQueryAt: time.Now(),
+				dhtId: ConvertPeerID(p)})
 			rt.PeerAdded(p)
 			return true, nil
 		}
@@ -153,10 +154,11 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 	// in that bucket with a LastSuccessfulOutboundQuery value above the maximum threshold and replace it.
 	allPeers := bucket.peers()
 	for _, pc := range allPeers {
-		if float64(time.Since(pc.LastSuccessfulOutboundQuery)) > rt.maxLastSuccessfulOutboundThreshold {
+		if float64(time.Since(pc.LastUsefulAt)) > rt.maxLastUsefulAt {
 			// let's evict it and add the new peer
 			if bucket.remove(pc.Id) {
-				bucket.pushFront(&PeerInfo{p, lastSuccessfulOutboundQuery, ConvertPeerID(p)})
+				bucket.pushFront(&PeerInfo{Id: p, LastUsefulAt: lastUsefulAt, LastSuccessfulOutboundQueryAt: time.Now(),
+					dhtId: ConvertPeerID(p)})
 				rt.PeerAdded(p)
 				return true, nil
 			}
@@ -180,9 +182,9 @@ func (rt *RoutingTable) GetPeerInfos() []PeerInfo {
 	return pis
 }
 
-// UpdateLastSuccessfulOutboundQuery updates the LastSuccessfulOutboundQuery time of the peer
+// UpdateLastSuccessfulOutboundQuery updates the LastSuccessfulOutboundQueryAt time of the peer.
 // Returns true if the update was successful, false otherwise.
-func (rt *RoutingTable) UpdateLastSuccessfulOutboundQuery(p peer.ID, t time.Time) bool {
+func (rt *RoutingTable) UpdateLastSuccessfulOutboundQueryAt(p peer.ID, t time.Time) bool {
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
 
@@ -190,7 +192,23 @@ func (rt *RoutingTable) UpdateLastSuccessfulOutboundQuery(p peer.ID, t time.Time
 	bucket := rt.buckets[bucketID]
 
 	if pc := bucket.getPeer(p); pc != nil {
-		pc.LastSuccessfulOutboundQuery = t
+		pc.LastSuccessfulOutboundQueryAt = t
+		return true
+	}
+	return false
+}
+
+// UpdateLastUsefulAt updates the LastUsefulAt time of the peer.
+// Returns true if the update was successful, false otherwise.
+func (rt *RoutingTable) UpdateLastUsefulAt(p peer.ID, t time.Time) bool {
+	rt.tabLock.Lock()
+	defer rt.tabLock.Unlock()
+
+	bucketID := rt.bucketIdForPeer(p)
+	bucket := rt.buckets[bucketID]
+
+	if pc := bucket.getPeer(p); pc != nil {
+		pc.LastUsefulAt = t
 		return true
 	}
 	return false
