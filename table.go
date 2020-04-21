@@ -169,6 +169,11 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 
 	// peer already exists in the Routing Table.
 	if peer := bucket.getPeer(p); peer != nil {
+		// if we're querying the peer first time after adding it, let's give it a
+		// usefulness bump. This will ONLY happen once.
+		if peer.LastUsefulAt.IsZero() && queryPeer {
+			peer.LastUsefulAt = lastUsefulAt
+		}
 		return false, nil
 	}
 
