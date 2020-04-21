@@ -105,6 +105,14 @@ func (rt *RoutingTable) NPeersForCpl(cpl uint) int {
 	}
 }
 
+// IsBucketFull returns true if the Logical bucket for a given Cpl is full
+func (rt *RoutingTable) IsBucketFull(cpl uint) bool {
+	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
+
+	return rt.NPeersForCpl(cpl) == rt.bucketsize
+}
+
 // TryAddPeer tries to add a peer to the Routing table. If the peer ALREADY exists in the Routing Table, this call is a no-op.
 // If the peer is a queryPeer i.e. we queried it or it queried us, we set the LastSuccessfulOutboundQuery to the current time.
 // If the peer is just a peer that we connect to/it connected to us without any DHT query, we consider it as having
