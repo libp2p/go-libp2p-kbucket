@@ -105,6 +105,30 @@ func (rt *RoutingTable) NPeersForCpl(cpl uint) int {
 	}
 }
 
+// GetPeersForCpl returns the peers in the Routing Table with this cpl.
+func (rt *RoutingTable) GetPeersForCpl(cpl uint) []peer.ID {
+	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
+
+	var peers []peer.ID
+
+	// it's in the last bucket
+	if int(cpl) >= len(rt.buckets)-1 {
+		b := rt.buckets[len(rt.buckets)-1]
+		for _, p := range b.peerIds() {
+			if CommonPrefixLen(rt.local, ConvertPeerID(p)) == int(cpl) {
+				peers = append(peers, p)
+			}
+		}
+	} else {
+		for _, p := range rt.buckets[cpl].peerIds() {
+			peers = append(peers, p)
+		}
+	}
+
+	return peers
+}
+
 // IsBucketFull returns true if the Logical bucket for a given Cpl is full
 func (rt *RoutingTable) IsBucketFull(cpl uint) bool {
 	rt.tabLock.RLock()

@@ -116,6 +116,49 @@ func TestNPeersForCpl(t *testing.T) {
 	require.Equal(t, 2, rt.NPeersForCpl(0))
 }
 
+func TestGetPeersForCpl(t *testing.T) {
+	t.Parallel()
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	require.NoError(t, err)
+
+	require.Empty(t, rt.GetPeersForCpl(0))
+	require.Empty(t, rt.GetPeersForCpl(1))
+
+	// one peer with cpl 1
+	p1, _ := rt.GenRandPeerID(1)
+	rt.TryAddPeer(p1, true)
+	require.Empty(t, rt.GetPeersForCpl(0))
+	require.Len(t, rt.GetPeersForCpl(1), 1)
+	require.Contains(t, rt.GetPeersForCpl(1), p1)
+	require.Empty(t, rt.GetPeersForCpl(2))
+
+	// one peer with cpl 0
+	p2, _ := rt.GenRandPeerID(0)
+	rt.TryAddPeer(p2, true)
+	require.Len(t, rt.GetPeersForCpl(0), 1)
+	require.Contains(t, rt.GetPeersForCpl(0), p2)
+	require.Len(t, rt.GetPeersForCpl(1), 1)
+	require.Contains(t, rt.GetPeersForCpl(1), p1)
+	require.Empty(t, rt.GetPeersForCpl(2))
+
+	// split the bucket with a peer with cpl 1
+	p3, _ := rt.GenRandPeerID(1)
+	rt.TryAddPeer(p3, true)
+	require.Len(t, rt.GetPeersForCpl(0), 1)
+	require.Contains(t, rt.GetPeersForCpl(0), p2)
+
+	require.Len(t, rt.GetPeersForCpl(1), 2)
+	require.Contains(t, rt.GetPeersForCpl(1), p1)
+	require.Contains(t, rt.GetPeersForCpl(1), p3)
+	require.Empty(t, rt.GetPeersForCpl(2))
+
+	p0, _ := rt.GenRandPeerID(0)
+	rt.TryAddPeer(p0, true)
+	require.Len(t, rt.GetPeersForCpl(0), 2)
+}
+
 func TestEmptyBucketCollapse(t *testing.T) {
 	t.Parallel()
 	local := test.RandPeerIDFatal(t)
