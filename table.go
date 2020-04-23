@@ -94,8 +94,8 @@ func (rt *RoutingTable) NPeersForCpl(cpl uint) int {
 	if int(cpl) >= len(rt.buckets)-1 {
 		count := 0
 		b := rt.buckets[len(rt.buckets)-1]
-		for _, p := range b.peerIds() {
-			if CommonPrefixLen(rt.local, ConvertPeerID(p)) == int(cpl) {
+		for _, p := range b.peers() {
+			if CommonPrefixLen(rt.local, p.dhtId) == int(cpl) {
 				count++
 			}
 		}
@@ -103,38 +103,6 @@ func (rt *RoutingTable) NPeersForCpl(cpl uint) int {
 	} else {
 		return rt.buckets[cpl].len()
 	}
-}
-
-// GetPeersForCpl returns the peers in the Routing Table with this cpl.
-func (rt *RoutingTable) GetPeersForCpl(cpl uint) []peer.ID {
-	rt.tabLock.RLock()
-	defer rt.tabLock.RUnlock()
-
-	var peers []peer.ID
-
-	// it's in the last bucket
-	if int(cpl) >= len(rt.buckets)-1 {
-		b := rt.buckets[len(rt.buckets)-1]
-		for _, p := range b.peerIds() {
-			if CommonPrefixLen(rt.local, ConvertPeerID(p)) == int(cpl) {
-				peers = append(peers, p)
-			}
-		}
-	} else {
-		for _, p := range rt.buckets[cpl].peerIds() {
-			peers = append(peers, p)
-		}
-	}
-
-	return peers
-}
-
-// IsBucketFull returns true if the Logical bucket for a given Cpl is full
-func (rt *RoutingTable) IsBucketFull(cpl uint) bool {
-	rt.tabLock.RLock()
-	defer rt.tabLock.RUnlock()
-
-	return rt.NPeersForCpl(cpl) == rt.bucketsize
 }
 
 // TryAddPeer tries to add a peer to the Routing table. If the peer ALREADY exists in the Routing Table, this call is a no-op.
@@ -285,23 +253,25 @@ func (rt *RoutingTable) removePeer(p peer.ID) {
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
 	if bucket.remove(p) {
+		for {
+			lastBucketIndex := len(rt.buckets) - 1
+
+			// remove the last bucket if it's empty and it isn't the only bucket we have
+			if len(rt.buckets) > 1 && rt.buckets[lastBucketIndex].len() == 0 {
+				rt.buckets[lastBucketIndex] = nil
+				rt.buckets = rt.buckets[:lastBucketIndex]
+			} else if len(rt.buckets) >= 2 && rt.buckets[lastBucketIndex-1].len() == 0 {
+				// if the second last bucket just became empty, remove and replace it with the last bucket.
+				rt.buckets[lastBucketIndex-1] = rt.buckets[lastBucketIndex]
+				rt.buckets[lastBucketIndex] = nil
+				rt.buckets = rt.buckets[:lastBucketIndex]
+			} else {
+				break
+			}
+		}
+
 		// peer removed callback
 		rt.PeerRemoved(p)
-
-		// remove this bucket if it was the last bucket and it's now empty
-		// provided it isn't the ONLY bucket we have.
-		if len(rt.buckets) > 1 && bucketID == len(rt.buckets)-1 && len(bucket.peers()) == 0 {
-			rt.buckets[bucketID] = nil
-			rt.buckets = rt.buckets[:bucketID]
-			return
-		}
-
-		// if the second last bucket just became empty, remove and replace it with the last bucket.
-		if bucketID == len(rt.buckets)-2 && len(bucket.peers()) == 0 {
-			rt.buckets[bucketID] = rt.buckets[bucketID+1]
-			rt.buckets[bucketID+1] = nil
-			rt.buckets = rt.buckets[:bucketID+1]
-		}
 	}
 }
 
