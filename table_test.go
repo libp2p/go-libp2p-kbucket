@@ -193,6 +193,22 @@ func TestEmptyBucketCollapse(t *testing.T) {
 	rt.tabLock.Lock()
 	require.Len(t, rt.buckets, 1)
 	rt.tabLock.Unlock()
+
+	// an empty bucket in the middle DOES NOT collapse buckets
+	rt.TryAddPeer(p1, true)
+	rt.TryAddPeer(p2, true)
+	rt.TryAddPeer(p3, true)
+	rt.TryAddPeer(p4, true)
+
+	rt.tabLock.Lock()
+	require.Len(t, rt.buckets, 4)
+	rt.tabLock.Unlock()
+
+	rt.RemovePeer(p2)
+	rt.tabLock.Lock()
+	require.Len(t, rt.buckets, 4)
+	rt.tabLock.Unlock()
+	require.NotContains(t, rt.ListPeers(), p2)
 }
 
 func TestRemovePeer(t *testing.T) {
