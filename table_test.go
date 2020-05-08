@@ -60,6 +60,11 @@ func TestBucket(t *testing.T) {
 	require.EqualValues(t, t2, p.LastSuccessfulOutboundQueryAt)
 	require.EqualValues(t, t3, p.LastUsefulAt)
 
+	p.Id = peer.ID("randid")
+	require.EqualValues(t, "randid", b.selectFirst(func(pi *PeerInfo) bool {
+		return pi.Id == "randid"
+	}))
+
 	spl := b.split(0, ConvertPeerID(local))
 	llist := b.list
 	for e := llist.Front(); e != nil; e = e.Next() {
@@ -78,6 +83,7 @@ func TestBucket(t *testing.T) {
 			t.Fatalf("split failed. found id with cpl == 0 in non 0 bucket")
 		}
 	}
+
 }
 
 func TestRemovePeer(t *testing.T) {

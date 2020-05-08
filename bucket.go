@@ -43,12 +43,25 @@ func newBucket() *bucket {
 // returns all peers in the bucket
 // it is safe for the caller to modify the returned objects as it is a defensive copy
 func (b *bucket) peers() []PeerInfo {
-	var ps []PeerInfo
+	ps := make([]PeerInfo, 0, b.len())
 	for e := b.list.Front(); e != nil; e = e.Next() {
 		p := e.Value.(*PeerInfo)
 		ps = append(ps, *p)
 	}
 	return ps
+}
+
+// returns the first peer in the bucket that satisfies the given predicate.
+// It is NOT safe for the predicate to mutate the given `PeerInfo`
+// as we pass in a pointer to it.
+func (b *bucket) selectFirst(predicate func(p *PeerInfo) bool) peer.ID {
+	for e := b.list.Front(); e != nil; e = e.Next() {
+		p := e.Value.(*PeerInfo)
+		if predicate(p) {
+			return p.Id
+		}
+	}
+	return ""
 }
 
 // return the Ids of all the peers in the bucket.

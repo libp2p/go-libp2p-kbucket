@@ -152,16 +152,16 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 
 	// the bucket to which the peer belongs is full. Let's try to find a peer
 	// in that bucket with a LastSuccessfulOutboundQuery value above the maximum threshold and replace it.
-	allPeers := bucket.peers()
-	for _, pc := range allPeers {
-		if time.Since(pc.LastUsefulAt) > rt.usefulnessGracePeriod {
-			// let's evict it and add the new peer
-			if bucket.remove(pc.Id) {
-				bucket.pushFront(&PeerInfo{Id: p, LastUsefulAt: lastUsefulAt, LastSuccessfulOutboundQueryAt: time.Now(),
-					dhtId: ConvertPeerID(p)})
-				rt.PeerAdded(p)
-				return true, nil
-			}
+	pid := bucket.selectFirst(func(pi *PeerInfo) bool {
+		return time.Since(pi.LastUsefulAt) > rt.usefulnessGracePeriod
+	})
+	if pid != "" {
+		// let's evict it and add the new peer
+		if bucket.remove(pid) {
+			bucket.pushFront(&PeerInfo{Id: p, LastUsefulAt: lastUsefulAt, LastSuccessfulOutboundQueryAt: time.Now(),
+				dhtId: ConvertPeerID(p)})
+			rt.PeerAdded(p)
+			return true, nil
 		}
 	}
 
