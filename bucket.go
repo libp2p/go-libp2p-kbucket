@@ -51,17 +51,26 @@ func (b *bucket) peers() []PeerInfo {
 	return ps
 }
 
-// returns the first peer in the bucket that satisfies the given predicate.
-// It is NOT safe for the predicate to mutate the given `PeerInfo`
+// returns the "minimum" peer in the bucket based on the `lessThan` comparator passed to it.
+// It is NOT safe for the comparator to mutate the given `PeerInfo`
 // as we pass in a pointer to it.
-func (b *bucket) selectFirst(predicate func(p *PeerInfo) bool) peer.ID {
-	for e := b.list.Front(); e != nil; e = e.Next() {
-		p := e.Value.(*PeerInfo)
-		if predicate(p) {
-			return p.Id
+// It is NOT safe to modify the returned value.
+func (b *bucket) min(lessThan func(p1 *PeerInfo, p2 *PeerInfo) bool) *PeerInfo {
+	if b.list.Len() == 0 {
+		return nil
+	}
+
+	minVal := b.list.Front().Value.(*PeerInfo)
+
+	for e := b.list.Front().Next(); e != nil; e = e.Next() {
+		val := e.Value.(*PeerInfo)
+
+		if lessThan(val, minVal) {
+			minVal = val
 		}
 	}
-	return ""
+
+	return minVal
 }
 
 // return the Ids of all the peers in the bucket.
