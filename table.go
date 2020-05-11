@@ -105,10 +105,16 @@ func (rt *RoutingTable) NPeersForCpl(cpl uint) int {
 	}
 }
 
-// TryAddPeer tries to add a peer to the Routing table. If the peer ALREADY exists in the Routing Table, this call is a no-op.
+// TryAddPeer tries to add a peer to the Routing table.
+// If the peer ALREADY exists in the Routing Table and has been queried before, this call is a no-op.
+// If the peer ALREADY exists in the Routing Table but hasn't been queried before, we set it's LastUsefulAt value to
+// the current time. This needs to done because we don't mark peers as "Useful"(by setting the LastUsefulAt value)
+// when we first connect to them.
+//
 // If the peer is a queryPeer i.e. we queried it or it queried us, we set the LastSuccessfulOutboundQuery to the current time.
 // If the peer is just a peer that we connect to/it connected to us without any DHT query, we consider it as having
 // no LastSuccessfulOutboundQuery.
+//
 //
 // If the logical bucket to which the peer belongs is full and it's not the last bucket, we try to replace an existing peer
 // whose LastSuccessfulOutboundQuery is above the maximum allowed threshold in that bucket with the new peer.
