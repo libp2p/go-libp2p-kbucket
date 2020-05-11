@@ -80,6 +80,137 @@ func TestBucket(t *testing.T) {
 	}
 }
 
+func TestNPeersForCpl(t *testing.T) {
+	t.Parallel()
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	require.NoError(t, err)
+
+	require.Equal(t, 0, rt.NPeersForCpl(0))
+	require.Equal(t, 0, rt.NPeersForCpl(1))
+
+	// one peer with cpl 1
+	p, _ := rt.GenRandPeerID(1)
+	rt.TryAddPeer(p, true)
+	require.Equal(t, 0, rt.NPeersForCpl(0))
+	require.Equal(t, 1, rt.NPeersForCpl(1))
+	require.Equal(t, 0, rt.NPeersForCpl(2))
+
+	// one peer with cpl 0
+	p, _ = rt.GenRandPeerID(0)
+	rt.TryAddPeer(p, true)
+	require.Equal(t, 1, rt.NPeersForCpl(0))
+	require.Equal(t, 1, rt.NPeersForCpl(1))
+	require.Equal(t, 0, rt.NPeersForCpl(2))
+
+	// split the bucket with a peer with cpl 1
+	p, _ = rt.GenRandPeerID(1)
+	rt.TryAddPeer(p, true)
+	require.Equal(t, 1, rt.NPeersForCpl(0))
+	require.Equal(t, 2, rt.NPeersForCpl(1))
+	require.Equal(t, 0, rt.NPeersForCpl(2))
+
+	p, _ = rt.GenRandPeerID(0)
+	rt.TryAddPeer(p, true)
+	require.Equal(t, 2, rt.NPeersForCpl(0))
+}
+
+func TestEmptyBucketCollapse(t *testing.T) {
+	t.Parallel()
+	local := test.RandPeerIDFatal(t)
+
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	require.NoError(t, err)
+
+	// generate peers with cpl 0,1,2 & 3
+	p1, _ := rt.GenRandPeerID(0)
+	p2, _ := rt.GenRandPeerID(1)
+	p3, _ := rt.GenRandPeerID(2)
+	p4, _ := rt.GenRandPeerID(3)
+
+	// remove peer on an empty bucket should not panic.
+	rt.RemovePeer(p1)
+
+	// add peer with cpl 0 and remove it..bucket should still exist as it's the ONLY bucket we have
+	b, err := rt.TryAddPeer(p1, true)
+	require.True(t, b)
+	require.NoError(t, err)
+	rt.RemovePeer(p1)
+	rt.tabLock.Lock()
+	require.Len(t, rt.buckets, 1)
+	rt.tabLock.Unlock()
+	require.Empty(t, rt.ListPeers())
+
+	// add peer with cpl 0 and cpl 1 and verify we have two buckets.
+	b, err = rt.TryAddPeer(p1, true)
+	require.True(t, b)
+	b, err = rt.TryAddPeer(p2, true)
+	require.True(t, b)
+	rt.tabLock.Lock()
+	require.Len(t, rt.buckets, 2)
+	rt.tabLock.Unlock()
+
+	// removing a peer from the last bucket collapses it.
+	rt.RemovePeer(p2)
+	rt.tabLock.Lock()
+	require.Len(t, rt.buckets, 1)
+	rt.tabLock.Unlock()
+	require.Len(t, rt.ListPeers(), 1)
+	require.Contains(t, rt.ListPeers(), p1)
+
+	// add p2 again
+	b, err = rt.TryAddPeer(p2, true)
+	require.True(t, b)
+	require.NoError(t, err)
+	rt.tabLock.Lock()
+	require.Len(t, rt.buckets, 2)
+	rt.tabLock.Unlock()
+
+	// now remove a peer from the second-last i.e. first bucket and ensure it collapses
+	rt.RemovePeer(p1)
+	rt.tabLock.Lock()
+	require.Len(t, rt.buckets, 1)
+	rt.tabLock.Unlock()
+	require.Len(t, rt.ListPeers(), 1)
+	require.Contains(t, rt.ListPeers(), p2)
+
+	// let's have a total of 4 buckets now
+	rt.TryAddPeer(p1, true)
+	rt.TryAddPeer(p2, true)
+	rt.TryAddPeer(p3, true)
+	rt.TryAddPeer(p4, true)
+
+	rt.tabLock.Lock()
+	require.Len(t, rt.buckets, 4)
+	rt.tabLock.Unlock()
+
+	// removing from 2,3 and then 4 leaves us with ONLY one bucket
+	rt.RemovePeer(p2)
+	rt.RemovePeer(p3)
+	rt.RemovePeer(p4)
+	rt.tabLock.Lock()
+	require.Len(t, rt.buckets, 1)
+	rt.tabLock.Unlock()
+
+	// an empty bucket in the middle DOES NOT collapse buckets
+	rt.TryAddPeer(p1, true)
+	rt.TryAddPeer(p2, true)
+	rt.TryAddPeer(p3, true)
+	rt.TryAddPeer(p4, true)
+
+	rt.tabLock.Lock()
+	require.Len(t, rt.buckets, 4)
+	rt.tabLock.Unlock()
+
+	rt.RemovePeer(p2)
+	rt.tabLock.Lock()
+	require.Len(t, rt.buckets, 4)
+	rt.tabLock.Unlock()
+	require.NotContains(t, rt.ListPeers(), p2)
+}
+
 func TestRemovePeer(t *testing.T) {
 	t.Parallel()
 	local := test.RandPeerIDFatal(t)
