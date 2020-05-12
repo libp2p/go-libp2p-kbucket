@@ -78,6 +78,7 @@ func TestBucket(t *testing.T) {
 			t.Fatalf("split failed. found id with cpl == 0 in non 0 bucket")
 		}
 	}
+
 }
 
 func TestNPeersForCpl(t *testing.T) {
