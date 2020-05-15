@@ -34,7 +34,13 @@ func TestBucket(t *testing.T) {
 	peers := make([]peer.ID, 100)
 	for i := 0; i < 100; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
-		b.pushFront(&PeerInfo{peers[i], testTime1, testTime2, ConvertPeerID(peers[i])})
+		b.pushFront(&PeerInfo{
+			Id:                            peers[i],
+			LastUsefulAt:                  testTime1,
+			LastSuccessfulOutboundQueryAt: testTime2,
+			AddedAt:                       testTime1,
+			dhtId:                         ConvertPeerID(peers[i]),
+		})
 	}
 
 	local := test.RandPeerIDFatal(t)
