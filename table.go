@@ -136,9 +136,11 @@ func (rt *RoutingTable) TryAddPeer(p peer.ID, queryPeer bool) (bool, error) {
 func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
+
+	now := time.Now()
 	var lastUsefulAt time.Time
 	if queryPeer {
-		lastUsefulAt = time.Now()
+		lastUsefulAt = now
 	}
 
 	// peer already exists in the Routing Table.
@@ -159,8 +161,13 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 
 	// We have enough space in the bucket (whether spawned or grouped).
 	if bucket.len() < rt.bucketsize {
-		bucket.pushFront(&PeerInfo{Id: p, LastUsefulAt: lastUsefulAt, LastSuccessfulOutboundQueryAt: time.Now(),
-			dhtId: ConvertPeerID(p)})
+		bucket.pushFront(&PeerInfo{
+			Id:                            p,
+			LastUsefulAt:                  lastUsefulAt,
+			LastSuccessfulOutboundQueryAt: now,
+			AddedAt:                       now,
+			dhtId:                         ConvertPeerID(p),
+		})
 		rt.PeerAdded(p)
 		return true, nil
 	}
@@ -174,8 +181,13 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 
 		// push the peer only if the bucket isn't overflowing after slitting
 		if bucket.len() < rt.bucketsize {
-			bucket.pushFront(&PeerInfo{Id: p, LastUsefulAt: lastUsefulAt, LastSuccessfulOutboundQueryAt: time.Now(),
-				dhtId: ConvertPeerID(p)})
+			bucket.pushFront(&PeerInfo{
+				Id:                            p,
+				LastUsefulAt:                  lastUsefulAt,
+				LastSuccessfulOutboundQueryAt: now,
+				AddedAt:                       now,
+				dhtId:                         ConvertPeerID(p),
+			})
 			rt.PeerAdded(p)
 			return true, nil
 		}
@@ -190,8 +202,13 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 	if time.Since(minLast.LastUsefulAt) > rt.usefulnessGracePeriod {
 		// let's evict it and add the new peer
 		if bucket.remove(minLast.Id) {
-			bucket.pushFront(&PeerInfo{Id: p, LastUsefulAt: lastUsefulAt, LastSuccessfulOutboundQueryAt: time.Now(),
-				dhtId: ConvertPeerID(p)})
+			bucket.pushFront(&PeerInfo{
+				Id:                            p,
+				LastUsefulAt:                  lastUsefulAt,
+				LastSuccessfulOutboundQueryAt: now,
+				AddedAt:                       now,
+				dhtId:                         ConvertPeerID(p),
+			})
 			rt.PeerAdded(p)
 			return true, nil
 		}

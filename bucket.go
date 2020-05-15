@@ -21,6 +21,9 @@ type PeerInfo struct {
 	// successful query response from the peer.
 	LastSuccessfulOutboundQueryAt time.Time
 
+	// AddedAt is the time this peer was added to the routing table.
+	AddedAt time.Time
+
 	// Id of the peer in the DHT XOR keyspace
 	dhtId ID
 }
