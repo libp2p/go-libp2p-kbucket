@@ -201,7 +201,7 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 
 	if time.Since(minLast.LastUsefulAt) > rt.usefulnessGracePeriod {
 		// let's evict it and add the new peer
-		if bucket.remove(minLast.Id) {
+		if rt.removePeer(minLast.Id) {
 			bucket.pushFront(&PeerInfo{
 				Id:                            p,
 				LastUsefulAt:                  lastUsefulAt,
@@ -273,7 +273,7 @@ func (rt *RoutingTable) RemovePeer(p peer.ID) {
 }
 
 // locking is the responsibility of the caller
-func (rt *RoutingTable) removePeer(p peer.ID) {
+func (rt *RoutingTable) removePeer(p peer.ID) bool {
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
 	if bucket.remove(p) {
@@ -296,7 +296,9 @@ func (rt *RoutingTable) removePeer(p peer.ID) {
 
 		// peer removed callback
 		rt.PeerRemoved(p)
+		return true
 	}
+	return false
 }
 
 func (rt *RoutingTable) nextBucket() {
