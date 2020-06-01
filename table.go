@@ -216,7 +216,6 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 
 	if time.Since(minLast.LastUsefulAt) > rt.usefulnessGracePeriod {
 		// let's evict it and add the new peer
-
 		if rt.removePeer(minLast.Id) {
 			bucket.pushFront(&PeerInfo{
 				Id:                            p,
