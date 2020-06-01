@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"sync"
+	"time"
 
-	asn "github.com/libp2p/go-libp2p-asn"
+	asnutil "github.com/libp2p/go-libp2p-asn-util"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	logging "github.com/ipfs/go-log"
@@ -63,9 +65,6 @@ type PeerIPGroupFilter interface {
 	// PeerAddresses is called by the Filter to determine the addresses of the given peer
 	// it should use to determine the IP groups it belongs to.
 	PeerAddresses(peer.ID) []ma.Multiaddr
-
-	// PrintStats is a utility function for caller/users to view the IP Group Diversity stats.
-	PrintStats()
 }
 
 // Filter is a peer diversity filter that accepts or rejects peers based on the blacklisting/whitelisting
@@ -86,9 +85,13 @@ type Filter struct {
 	logKey string
 
 	cplFnc func(peer.ID) int
+
+	cplPeerGroups map[int]map[peer.ID][]PeerIPGroupKey
+	// TODO This is for testing/logging purpose ONLY and can/should be removed later.
+	//cplRejections map[int]map[peer.ID]string
 }
 
-func NewFilter(pgm PeerIPGroupFilter, logKey string, cplFnc func(peer.ID) int) (*Filter, error) {
+func NewFilter(pgm PeerIPGroupFilter, appName string, cplFnc func(peer.ID) int) (*Filter, error) {
 	if pgm == nil {
 		return nil, errors.New("peergroup implementation can not be nil")
 	}
@@ -106,13 +109,15 @@ func NewFilter(pgm PeerIPGroupFilter, logKey string, cplFnc func(peer.ID) int) (
 	}
 
 	return &Filter{
-		pgm:         pgm,
-		peerGroups:  make(map[peer.ID][]PeerGroupInfo),
-		wls:         cidranger.NewPCTrieRanger(),
-		bls:         cidranger.NewPCTrieRanger(),
-		legacyCidrs: legacyCidrs,
-		logKey:      logKey,
-		cplFnc:      cplFnc,
+		pgm:           pgm,
+		peerGroups:    make(map[peer.ID][]PeerGroupInfo),
+		wls:           cidranger.NewPCTrieRanger(),
+		bls:           cidranger.NewPCTrieRanger(),
+		legacyCidrs:   legacyCidrs,
+		logKey:        appName,
+		cplFnc:        cplFnc,
+		cplPeerGroups: make(map[int]map[peer.ID][]PeerIPGroupKey),
+		//cplRejections: make(map[int]map[peer.ID]string),
 	}, nil
 }
 
@@ -120,11 +125,18 @@ func (f *Filter) Remove(p peer.ID) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	cpl := f.cplFnc(p)
+
 	for _, info := range f.peerGroups[p] {
 		f.pgm.Decrement(info)
 	}
 	f.peerGroups[p] = nil
 	delete(f.peerGroups, p)
+	delete(f.cplPeerGroups[cpl], p)
+
+	if len(f.cplPeerGroups[cpl]) == 0 {
+		delete(f.cplPeerGroups, cpl)
+	}
 }
 
 // returns true if peer was accepted and added to the Filter state.
@@ -176,17 +188,30 @@ func (f *Filter) AddIfAllowed(p peer.ID) bool {
 		}
 
 		if !f.pgm.Allow(group) {
+			/*_, ok := f.cplRejections[cpl]
+			if !ok {
+				f.cplRejections[cpl] = make(map[peer.ID]string)
+			}
+			f.cplRejections[cpl][p] = ip.String()*/
 			return false
 		}
 
 		peerGroups = append(peerGroups, group)
 	}
 
+	_, ok := f.cplPeerGroups[cpl]
+	if !ok {
+		f.cplPeerGroups[cpl] = make(map[peer.ID][]PeerIPGroupKey)
+	}
+
 	// add
 	for _, g := range peerGroups {
 		f.pgm.Increment(g)
 		f.peerGroups[p] = append(f.peerGroups[p], g)
+		f.cplPeerGroups[cpl][p] = append(f.cplPeerGroups[cpl][p], g.IPGroupKey)
 	}
+
+	//delete(f.cplRejections[cpl], p)
 
 	return true
 }
@@ -203,9 +228,9 @@ func (f *Filter) BlacklistIPNetwork(cidr string) error {
 	return f.bls.Insert(cidranger.NewBasicRangerEntry(*nn))
 }
 
-// AlwaysAllowIPNetwork will always allow IP addresses from networks with the given CIDR.
+// WhitelistIPNetwork will always allow IP addresses from networks with the given CIDR.
 // This will always override the blacklist.
-func (f *Filter) AlwaysAllowIPNetwork(cidr string) error {
+func (f *Filter) WhitelistIPNetwork(cidr string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -223,7 +248,7 @@ func (f *Filter) ipGroupKey(ip net.IP) (PeerIPGroupKey, error) {
 	case nil:
 		// TODO Clean up the ASN codebase
 		// ipv6 Address -> get ASN
-		s, err := asn.Store.AsnForIP(ip)
+		s, err := asnutil.Store.AsnForIPv6(ip)
 		if err != nil {
 			return "", fmt.Errorf("failed to fetch ASN for IPv6 addr %s: %w", ip.String(), err)
 		}
@@ -240,4 +265,40 @@ func (f *Filter) ipGroupKey(ip net.IP) (PeerIPGroupKey, error) {
 		key := ip.Mask(net.IPv4Mask(255, 255, 0, 0)).String()
 		return PeerIPGroupKey(key), nil
 	}
+}
+
+func (f *Filter) PrintStats() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	fmt.Printf("\n --------------Peer Diversity Stats for [%s] At %v----------------", f.logKey, time.Now().String())
+
+	var sortedCpls []int
+	for cpl := range f.cplPeerGroups {
+		sortedCpls = append(sortedCpls, cpl)
+	}
+	sort.Ints(sortedCpls)
+
+	for cpl := range sortedCpls {
+		fmt.Printf("\n\t Cpl=%d\tTotalPeers=%d", cpl, len(f.cplPeerGroups[cpl]))
+		for p, groups := range f.cplPeerGroups[cpl] {
+			fmt.Printf("\n\t\t\t - Peer=%s\tGroups=%v", p.Pretty(), groups)
+		}
+	}
+	fmt.Println("\n-------------------------------------------------------------------")
+
+	/*fmt.Printf("\n-------- Rejection Stats till now -----------------------------------")
+	var sortedRejectedCpls []int
+	for cpl := range f.cplRejections {
+		sortedRejectedCpls = append(sortedRejectedCpls, cpl)
+	}
+	sort.Ints(sortedRejectedCpls)
+
+	for cpl := range sortedRejectedCpls {
+		fmt.Printf("\n\t Cpl=%d\tTotalRejectedPeers=%d", cpl, len(f.cplRejections[cpl]))
+		for p, a := range f.cplRejections[cpl] {
+			fmt.Printf("\n\t\t\t - Peer=%s\tAddress=%v", p.Pretty(), a)
+		}
+	}
+	fmt.Printf("\n-----------------------------------------------------------------------------")*/
 }
