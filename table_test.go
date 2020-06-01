@@ -665,6 +665,48 @@ func TestGetPeerInfos(t *testing.T) {
 	require.False(t, ms[p2].LastUsefulAt.IsZero())
 }
 
+func TestPeerRemovedNotificationWhenPeerIsEvicted(t *testing.T) {
+	t.Parallel()
+
+	local := test.RandPeerIDFatal(t)
+	m := pstore.NewMetrics()
+	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, 1*time.Hour)
+	require.NoError(t, err)
+	pset := make(map[peer.ID]struct{})
+	rt.PeerAdded = func(p peer.ID) {
+		pset[p] = struct{}{}
+	}
+	rt.PeerRemoved = func(p peer.ID) {
+		delete(pset, p)
+	}
+
+	p1, _ := rt.GenRandPeerID(0)
+	p2, _ := rt.GenRandPeerID(0)
+
+	// first peer works
+	b, err := rt.TryAddPeer(p1, true)
+	require.NoError(t, err)
+	require.True(t, b)
+
+	// second is rejected because of capacity
+	b, err = rt.TryAddPeer(p2, true)
+	require.False(t, b)
+	require.Error(t, err)
+
+	// pset has first peer
+	require.Contains(t, pset, p1)
+	require.NotContains(t, pset, p2)
+
+	// update last useful at so it's ripe for eviction.
+	require.True(t, rt.UpdateLastUsefulAt(p1, time.Now().AddDate(-1, 0, 0)))
+
+	b, err = rt.TryAddPeer(p2, true)
+	require.NoError(t, err)
+	require.True(t, b)
+	require.Contains(t, pset, p2)
+	require.NotContains(t, pset, p1)
+}
+
 func BenchmarkAddPeer(b *testing.B) {
 	b.StopTimer()
 	local := ConvertKey("localKey")
