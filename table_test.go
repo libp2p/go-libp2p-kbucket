@@ -1,6 +1,8 @@
 package kbucket
 
 import (
+	"github.com/libp2p/go-libp2p-kbucket/peerdiversity"
+	ma "github.com/multiformats/go-multiaddr"
 	"math/rand"
 	"testing"
 	"time"
@@ -18,7 +20,7 @@ func TestPrint(t *testing.T) {
 	t.Parallel()
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 	rt.Print()
 }
@@ -91,7 +93,7 @@ func TestNPeersForCpl(t *testing.T) {
 	t.Parallel()
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 0, rt.NPeersForCpl(0))
@@ -128,7 +130,7 @@ func TestEmptyBucketCollapse(t *testing.T) {
 	local := test.RandPeerIDFatal(t)
 
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
 	// generate peers with cpl 0,1,2 & 3
@@ -223,7 +225,7 @@ func TestRemovePeer(t *testing.T) {
 	local := test.RandPeerIDFatal(t)
 
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
 	p1, _ := rt.GenRandPeerID(0)
@@ -252,7 +254,7 @@ func TestTableCallbacks(t *testing.T) {
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
@@ -301,7 +303,7 @@ func TestTryAddPeerLoad(t *testing.T) {
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
@@ -327,7 +329,7 @@ func TestTableFind(t *testing.T) {
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
@@ -346,7 +348,7 @@ func TestTableFind(t *testing.T) {
 func TestUpdateLastSuccessfulOutboundQueryAt(t *testing.T) {
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
 	p := test.RandPeerIDFatal(t)
@@ -367,7 +369,7 @@ func TestUpdateLastSuccessfulOutboundQueryAt(t *testing.T) {
 func TestUpdateLastUsefulAt(t *testing.T) {
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
 	p := test.RandPeerIDFatal(t)
@@ -391,7 +393,7 @@ func TestTryAddPeer(t *testing.T) {
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, minThreshold)
+	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, minThreshold, nil)
 	require.NoError(t, err)
 
 	// generate 2 peers to saturate the first bucket for cpl=0
@@ -458,7 +460,7 @@ func TestTableFindMultiple(t *testing.T) {
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	rt, err := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
@@ -480,7 +482,7 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
 
-	rt, err := NewRoutingTable(5, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	rt, err := NewRoutingTable(5, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
@@ -526,7 +528,7 @@ func TestTableMultithreaded(t *testing.T) {
 
 	local := peer.ID("localPeer")
 	m := pstore.NewMetrics()
-	tab, err := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	tab, err := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 	var peers []peer.ID
 	for i := 0; i < 500; i++ {
@@ -562,10 +564,80 @@ func TestTableMultithreaded(t *testing.T) {
 	<-done
 }
 
+type mockPeerGroupFilter struct {
+	peerAddressFunc func(p peer.ID) []ma.Multiaddr
+	allowFnc        func(g peerdiversity.PeerGroupInfo) bool
+
+	incrementFnc func(g peerdiversity.PeerGroupInfo)
+	decrementFnc func(p peerdiversity.PeerGroupInfo)
+}
+
+func (m *mockPeerGroupFilter) Allow(g peerdiversity.PeerGroupInfo) (allow bool) {
+	return m.allowFnc(g)
+}
+
+func (m *mockPeerGroupFilter) PeerAddresses(p peer.ID) []ma.Multiaddr {
+	return m.peerAddressFunc(p)
+}
+
+func (m *mockPeerGroupFilter) Increment(g peerdiversity.PeerGroupInfo) {
+	if m.incrementFnc != nil {
+		m.incrementFnc(g)
+	}
+}
+
+func (m *mockPeerGroupFilter) Decrement(g peerdiversity.PeerGroupInfo) {
+	if m.decrementFnc != nil {
+		m.decrementFnc(g)
+	}
+}
+
+func TestDiversityFiltering(t *testing.T) {
+	local := test.RandPeerIDFatal(t)
+	cplCount := make(map[int]int)
+	mg := &mockPeerGroupFilter{}
+	mg.peerAddressFunc = func(p peer.ID) []ma.Multiaddr {
+		return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0")}
+	}
+	mg.allowFnc = func(g peerdiversity.PeerGroupInfo) bool {
+		return cplCount[g.Cpl] < 1
+	}
+
+	mg.incrementFnc = func(g peerdiversity.PeerGroupInfo) {
+		cplCount[g.Cpl] = cplCount[g.Cpl] + 1
+	}
+
+	mg.decrementFnc = func(g peerdiversity.PeerGroupInfo) {
+		cplCount[g.Cpl] = cplCount[g.Cpl] - 1
+	}
+
+	df, err := peerdiversity.NewFilter(mg, "appname", func(p peer.ID) int {
+		return CommonPrefixLen(ConvertPeerID(local), ConvertPeerID(p))
+	})
+	require.NoError(t, err)
+
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, pstore.NewMetrics(), NoOpThreshold, df)
+	require.NoError(t, err)
+	p, _ := rt.GenRandPeerID(2)
+	b, err := rt.TryAddPeer(p, true)
+	require.NoError(t, err)
+	require.True(t, b)
+
+	p2, _ := rt.GenRandPeerID(2)
+	b, err = rt.TryAddPeer(p2, true)
+	require.Error(t, err)
+	require.False(t, b)
+
+	rt.RemovePeer(p)
+	b, err = rt.TryAddPeer(p2, true)
+	require.NoError(t, err)
+	require.True(t, b)
+}
+
 func TestGetPeerInfos(t *testing.T) {
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold)
+	rt, err := NewRoutingTable(10, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
 	require.Empty(t, rt.GetPeerInfos())
@@ -597,7 +669,7 @@ func BenchmarkAddPeer(b *testing.B) {
 	b.StopTimer()
 	local := ConvertKey("localKey")
 	m := pstore.NewMetrics()
-	tab, err := NewRoutingTable(20, local, time.Hour, m, NoOpThreshold)
+	tab, err := NewRoutingTable(20, local, time.Hour, m, NoOpThreshold, nil)
 	require.NoError(b, err)
 
 	var peers []peer.ID
@@ -615,7 +687,7 @@ func BenchmarkFinds(b *testing.B) {
 	b.StopTimer()
 	local := ConvertKey("localKey")
 	m := pstore.NewMetrics()
-	tab, err := NewRoutingTable(20, local, time.Hour, m, NoOpThreshold)
+	tab, err := NewRoutingTable(20, local, time.Hour, m, NoOpThreshold, nil)
 	require.NoError(b, err)
 
 	var peers []peer.ID
