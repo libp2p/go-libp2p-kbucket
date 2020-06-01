@@ -670,7 +670,7 @@ func TestPeerRemovedNotificationWhenPeerIsEvicted(t *testing.T) {
 
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, 1*time.Hour)
+	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, 1*time.Hour, nil)
 	require.NoError(t, err)
 	pset := make(map[peer.ID]struct{})
 	rt.PeerAdded = func(p peer.ID) {
