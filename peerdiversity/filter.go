@@ -281,7 +281,7 @@ func (f *Filter) PrintStats() {
 	}
 	sort.Ints(sortedCpls)
 
-	for cpl := range sortedCpls {
+	for _, cpl := range sortedCpls {
 		fmt.Printf("\n\t Cpl=%d\tTotalPeers=%d", cpl, len(f.cplPeerGroups[cpl]))
 		for p, groups := range f.cplPeerGroups[cpl] {
 			fmt.Printf("\n\t\t\t - Peer=%s\tGroups=%v", p.Pretty(), groups)
