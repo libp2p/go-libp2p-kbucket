@@ -256,3 +256,46 @@ func TestIPGroupKey(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "32934", string(g))
 }
+
+func TestGetDiversityStats(t *testing.T) {
+	p1 := peer.ID("a")
+	p2 := peer.ID("b")
+
+	p3 := peer.ID("aa")
+	p4 := peer.ID("bb")
+
+	paddrs := map[peer.ID][]ma.Multiaddr{
+		p1: []ma.Multiaddr{ma.StringCast("/ip4/17.0.0.1/tcp/0"), ma.StringCast("/ip4/19.1.1.0")},
+		p2: []ma.Multiaddr{ma.StringCast("/ip4/18.1.0.1/tcp/0")},
+		p3: []ma.Multiaddr{ma.StringCast("/ip4/19.2.0.1/tcp/0")},
+		p4: []ma.Multiaddr{ma.StringCast("/ip4/20.3.0.1/tcp/0")},
+	}
+
+	m := newMockPeerGroupFilter()
+	m.peerAddressFunc = func(p peer.ID) []ma.Multiaddr {
+		return paddrs[p]
+	}
+	m.allowFnc = func(g PeerGroupInfo) bool {
+		return true
+	}
+
+	f, err := NewFilter(m, "test", func(p peer.ID) int {
+		return len(string(p))
+	})
+	require.NoError(t, err)
+
+	require.True(t, f.AddIfAllowed(p1))
+	require.True(t, f.AddIfAllowed(p2))
+	require.True(t, f.AddIfAllowed(p3))
+	require.True(t, f.AddIfAllowed(p4))
+
+	stats := f.GetDiversityStats()
+	require.Len(t, stats, 2)
+	require.Equal(t, stats[0].Cpl, 1)
+	require.Len(t, stats[0].Peers[p1], 2)
+	require.Len(t, stats[0].Peers[p2], 1)
+
+	require.Equal(t, stats[1].Cpl, 2)
+	require.Len(t, stats[1].Peers[p3], 1)
+	require.Len(t, stats[1].Peers[p4], 1)
+}

@@ -3,13 +3,11 @@ package peerdiversity
 import (
 	"errors"
 	"fmt"
+	asnutil "github.com/libp2p/go-libp2p-asn-util"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"net"
 	"sort"
 	"sync"
-	"time"
-
-	asnutil "github.com/libp2p/go-libp2p-asn-util"
-	"github.com/libp2p/go-libp2p-core/peer"
 
 	logging "github.com/ipfs/go-log"
 	ma "github.com/multiformats/go-multiaddr"
@@ -267,11 +265,18 @@ func (f *Filter) ipGroupKey(ip net.IP) (PeerIPGroupKey, error) {
 	}
 }
 
-func (f *Filter) PrintStats() {
+// CplDiversityStats contains the peer diversity stats for a Cpl.
+type CplDiversityStats struct {
+	Cpl   int
+	Peers map[peer.ID][]PeerIPGroupKey
+}
+
+// GetDiversityStats returns the diversity stats for each CPL and is sorted by the CPL.
+func (f *Filter) GetDiversityStats() []CplDiversityStats {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	fmt.Printf("\n --------------Peer Diversity Stats for [%s] At %v----------------", f.logKey, time.Now().String())
+	stats := make([]CplDiversityStats, 0, len(f.cplPeerGroups))
 
 	var sortedCpls []int
 	for cpl := range f.cplPeerGroups {
@@ -279,26 +284,15 @@ func (f *Filter) PrintStats() {
 	}
 	sort.Ints(sortedCpls)
 
-	for cpl := range sortedCpls {
-		fmt.Printf("\n\t Cpl=%d\tTotalPeers=%d", cpl, len(f.cplPeerGroups[cpl]))
+	for _, cpl := range sortedCpls {
+		ps := make(map[peer.ID][]PeerIPGroupKey, len(f.cplPeerGroups[cpl]))
+		cd := CplDiversityStats{cpl, ps}
+
 		for p, groups := range f.cplPeerGroups[cpl] {
-			fmt.Printf("\n\t\t\t - Peer=%s\tGroups=%v", p.Pretty(), groups)
+			ps[p] = groups
 		}
+		stats = append(stats, cd)
 	}
-	fmt.Println("\n-------------------------------------------------------------------")
 
-	/*fmt.Printf("\n-------- Rejection Stats till now -----------------------------------")
-	var sortedRejectedCpls []int
-	for cpl := range f.cplRejections {
-		sortedRejectedCpls = append(sortedRejectedCpls, cpl)
-	}
-	sort.Ints(sortedRejectedCpls)
-
-	for cpl := range sortedRejectedCpls {
-		fmt.Printf("\n\t Cpl=%d\tTotalRejectedPeers=%d", cpl, len(f.cplRejections[cpl]))
-		for p, a := range f.cplRejections[cpl] {
-			fmt.Printf("\n\t\t\t - Peer=%s\tAddress=%v", p.Pretty(), a)
-		}
-	}
-	fmt.Printf("\n-----------------------------------------------------------------------------")*/
+	return stats
 }
