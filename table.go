@@ -466,6 +466,24 @@ func (rt *RoutingTable) Print() {
 func (rt *RoutingTable) PrintDiversityStats() {
 	if rt.df != nil {
 		rt.df.PrintStats()
+
+		fmt.Println("\n --- Closer Peers(closer than the furthest among the closest 20)  that were rejected")
+
+		closestps := rt.NearestPeers(rt.local, 20)
+		f := closestps[len(closestps)-1]
+		df := xor(rt.local, ConvertPeerID(f))
+		fmt.Printf("\n Among the closest 20 peers, the furthest peer is %s with a CPL of %d",
+			f.Pretty(), CommonPrefixLen(ConvertPeerID(f), rt.local))
+
+		rejects := rt.df.GetRejections()
+		for i := range rejects {
+			di := xor(rt.local, ConvertPeerID(rejects[i].ID))
+			if di.less(df) {
+				fmt.Printf("\n\t PeerID=%s, CPL=%d, Address=%s", rejects[i].ID.Pretty(),
+					CommonPrefixLen(rt.local, ConvertPeerID(rejects[i].ID)), rejects[i].Addr)
+			}
+		}
+		fmt.Println("\n ----------------------------")
 	}
 }
 

@@ -88,7 +88,7 @@ type Filter struct {
 
 	cplPeerGroups map[int]map[peer.ID][]PeerIPGroupKey
 	// TODO This is for testing/logging purpose ONLY and can/should be removed later.
-	//cplRejections map[int]map[peer.ID]string
+	cplRejections map[int]map[peer.ID]string
 }
 
 func NewFilter(pgm PeerIPGroupFilter, appName string, cplFnc func(peer.ID) int) (*Filter, error) {
@@ -117,7 +117,7 @@ func NewFilter(pgm PeerIPGroupFilter, appName string, cplFnc func(peer.ID) int) 
 		logKey:        appName,
 		cplFnc:        cplFnc,
 		cplPeerGroups: make(map[int]map[peer.ID][]PeerIPGroupKey),
-		//cplRejections: make(map[int]map[peer.ID]string),
+		cplRejections: make(map[int]map[peer.ID]string),
 	}, nil
 }
 
@@ -188,16 +188,18 @@ func (f *Filter) AddIfAllowed(p peer.ID) bool {
 		}
 
 		if !f.pgm.Allow(group) {
-			/*_, ok := f.cplRejections[cpl]
+			_, ok := f.cplRejections[cpl]
 			if !ok {
 				f.cplRejections[cpl] = make(map[peer.ID]string)
 			}
-			f.cplRejections[cpl][p] = ip.String()*/
+			f.cplRejections[cpl][p] = ip.String()
 			return false
 		}
 
 		peerGroups = append(peerGroups, group)
 	}
+
+	delete(f.cplRejections[cpl], p)
 
 	_, ok := f.cplPeerGroups[cpl]
 	if !ok {
@@ -301,4 +303,23 @@ func (f *Filter) PrintStats() {
 		}
 	}
 	fmt.Printf("\n-----------------------------------------------------------------------------")*/
+}
+
+type AddrString struct {
+	ID peer.ID
+	Addr string
+}
+
+func (f *Filter) GetRejections() []AddrString{
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var peers []AddrString
+
+	for c, _ := range f.cplRejections {
+		for p,addr := range f.cplRejections[c] {
+			peers =  append(peers, AddrString{p, addr})
+		}
+	}
+
+	return peers
 }
