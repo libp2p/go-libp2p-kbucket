@@ -18,6 +18,10 @@ import (
 
 var dfLog = logging.Logger("diversityFilter")
 
+type asnStore interface {
+	AsnForIPv6(ip net.IP) (string, error)
+}
+
 // PeerIPGroupKey is a unique key that represents ONE of the IP Groups the peer belongs to.
 // A peer has one PeerIPGroupKey per address. Thus, a peer can belong to MULTIPLE Groups if it has
 // multiple addresses.
@@ -89,6 +93,8 @@ type Filter struct {
 	cplFnc func(peer.ID) int
 
 	cplPeerGroups map[int]map[peer.ID][]PeerIPGroupKey
+
+	asnStore asnStore
 }
 
 // NewFilter creates a Filter for Peer Diversity.
@@ -119,6 +125,7 @@ func NewFilter(pgm PeerIPGroupFilter, logKey string, cplFnc func(peer.ID) int) (
 		logKey:        logKey,
 		cplFnc:        cplFnc,
 		cplPeerGroups: make(map[int]map[peer.ID][]PeerIPGroupKey),
+		asnStore:      asnutil.Store,
 	}, nil
 }
 
@@ -267,7 +274,7 @@ func (f *Filter) ipGroupKey(ip net.IP) (PeerIPGroupKey, error) {
 	case nil:
 		// TODO Clean up the ASN codebase
 		// ipv6 Address -> get ASN
-		s, err := asnutil.Store.AsnForIPv6(ip)
+		s, err := f.asnStore.AsnForIPv6(ip)
 		if err != nil {
 			return "", fmt.Errorf("failed to fetch ASN for IPv6 addr %s: %w", ip.String(), err)
 		}

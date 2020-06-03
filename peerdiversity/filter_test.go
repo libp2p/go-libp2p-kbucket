@@ -275,8 +275,17 @@ func TestDiversityFilter(t *testing.T) {
 	}
 }
 
+type mockAsnStore struct {
+	reply string
+}
+
+func (m *mockAsnStore) AsnForIPv6(ip net.IP) (string, error) {
+	return m.reply, nil
+}
+
 func TestIPGroupKey(t *testing.T) {
 	f, err := NewFilter(newMockPeerGroupFilter(), "test", func(p peer.ID) int { return 1 })
+	f.asnStore = &mockAsnStore{"test"}
 	require.NoError(t, err)
 
 	// case 1 legacy /8
@@ -297,7 +306,7 @@ func TestIPGroupKey(t *testing.T) {
 	ip = net.ParseIP("2a03:2880:f003:c07:face:b00c::2")
 	g, err = f.ipGroupKey(ip)
 	require.NoError(t, err)
-	require.Equal(t, "32934", string(g))
+	require.Equal(t, "test", string(g))
 }
 
 func TestGetDiversityStats(t *testing.T) {
