@@ -62,7 +62,7 @@ func TestRefreshAndGetTrackedCpls(t *testing.T) {
 
 	// add peer IDs.
 	for i, id := range peerIDs {
-		added, err := rt.TryAddPeer(id, true)
+		added, err := rt.TryAddPeer(id, true, false)
 		require.NoError(t, err)
 		require.True(t, added)
 		require.Len(t, rt.GetTrackedCplsForRefresh(), minCpl+i+1)
@@ -83,7 +83,7 @@ func TestRefreshAndGetTrackedCpls(t *testing.T) {
 	}
 
 	// add our peer ID to max out the table
-	added, err := rt.TryAddPeer(local, true)
+	added, err := rt.TryAddPeer(local, true, false)
 	require.NoError(t, err)
 	require.True(t, added)
 

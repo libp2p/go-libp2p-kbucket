@@ -26,6 +26,9 @@ type PeerInfo struct {
 
 	// Id of the peer in the DHT XOR keyspace
 	dhtId ID
+
+	// if a bucket is full, this peer can be replaced to make space for a new peer.
+	replaceable bool
 }
 
 // bucket holds a list of peers.
@@ -54,26 +57,26 @@ func (b *bucket) peers() []PeerInfo {
 	return ps
 }
 
-// returns the "minimum" peer in the bucket based on the `lessThan` comparator passed to it.
-// It is NOT safe for the comparator to mutate the given `PeerInfo`
-// as we pass in a pointer to it.
+// findFirst returns the first peer in the bucket that satisfies the given predicate.
+// It is NOT safe for the predicate to mutate the given `PeerInfo` as we pass in a pointer to it.
 // It is NOT safe to modify the returned value.
-func (b *bucket) min(lessThan func(p1 *PeerInfo, p2 *PeerInfo) bool) *PeerInfo {
-	if b.list.Len() == 0 {
-		return nil
-	}
-
-	minVal := b.list.Front().Value.(*PeerInfo)
-
-	for e := b.list.Front().Next(); e != nil; e = e.Next() {
+func (b *bucket) findFirst(p func(p *PeerInfo) bool) *PeerInfo {
+	for e := b.list.Front(); e != nil; e = e.Next() {
 		val := e.Value.(*PeerInfo)
-
-		if lessThan(val, minVal) {
-			minVal = val
+		if p(val) {
+			return val
 		}
 	}
 
-	return minVal
+	return nil
+}
+
+// updateAllWith updates all the peers in the bucket by applying the given update function.
+func (b *bucket) updateAllWith(updateFnc func(p *PeerInfo)) {
+	for e := b.list.Front(); e != nil; e = e.Next() {
+		val := e.Value.(*PeerInfo)
+		updateFnc(val)
+	}
 }
 
 // return the Ids of all the peers in the bucket.
