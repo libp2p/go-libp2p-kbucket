@@ -64,10 +64,11 @@ func newMockPeerGroupFilter() *mockPeerGroupFilter {
 
 func TestDiversityFilter(t *testing.T) {
 	tcs := map[string]struct {
-		peersForTest func() []peer.ID
-		mFnc         func(m *mockPeerGroupFilter)
-		fFnc         func(f *Filter)
-		allowed      map[peer.ID]bool
+		peersForTest  func() []peer.ID
+		mFnc          func(m *mockPeerGroupFilter)
+		fFnc          func(f *Filter)
+		allowed       map[peer.ID]bool
+		isWhitelisted bool
 	}{
 		"simple allow": {
 			peersForTest: func() []peer.ID {
@@ -121,7 +122,34 @@ func TestDiversityFilter(t *testing.T) {
 			fFnc: func(f *Filter) {},
 		},
 
-		"whitelisting": {
+		"whitelisted peers": {
+			peersForTest: func() []peer.ID {
+				return []peer.ID{"p1", "p2"}
+			},
+			mFnc: func(m *mockPeerGroupFilter) {
+				m.peerAddressFunc = func(id peer.ID) []ma.Multiaddr {
+					if id == "p1" {
+						return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0")}
+					} else {
+						return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0")}
+					}
+				}
+
+				m.allowFnc = func(g PeerGroupInfo) bool {
+					return false
+				}
+			},
+			allowed: map[peer.ID]bool{
+				"p1": false,
+				"p2": true,
+			},
+			fFnc: func(f *Filter) {
+				f.WhitelistPeers(peer.ID("p2"))
+			},
+			isWhitelisted: true,
+		},
+
+		"whitelisted network": {
 			peersForTest: func() []peer.ID {
 				return []peer.ID{"p1", "p2"}
 			},
@@ -150,6 +178,7 @@ func TestDiversityFilter(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
+			isWhitelisted: true,
 		},
 
 		"blacklisting": {
@@ -211,20 +240,34 @@ func TestDiversityFilter(t *testing.T) {
 			tc.fFnc(f)
 
 			for _, p := range tc.peersForTest() {
-				b := f.AddIfAllowed(p)
+				b := f.TryAdd(p)
 				v, ok := tc.allowed[p]
 				require.True(t, ok, string(p))
 				require.Equal(t, v, b, string(p))
 
-				if v {
+				if v && !tc.isWhitelisted {
 					m.mu.Lock()
 					_, ok := m.increments[p]
-					m.mu.Unlock()
 					require.True(t, ok)
+					m.mu.Unlock()
+
 					f.Remove(p)
+
 					m.mu.Lock()
 					_, ok = m.decrements[p]
 					require.True(t, ok)
+					m.mu.Unlock()
+				} else if v && tc.isWhitelisted {
+					m.mu.Lock()
+					_, ok := m.increments[p]
+					require.False(t, ok)
+					m.mu.Unlock()
+
+					f.Remove(p)
+
+					m.mu.Lock()
+					_, ok = m.decrements[p]
+					require.False(t, ok)
 					m.mu.Unlock()
 				}
 			}
@@ -243,7 +286,7 @@ func TestIPGroupKey(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "17.0.0.0", string(g))
 
-	// case2 ip4 /8
+	// case2 ip4 /16
 	ip = net.ParseIP("192.168.1.1")
 	require.NotNil(t, ip.To4())
 	g, err = f.ipGroupKey(ip)
@@ -284,10 +327,10 @@ func TestGetDiversityStats(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.True(t, f.AddIfAllowed(p1))
-	require.True(t, f.AddIfAllowed(p2))
-	require.True(t, f.AddIfAllowed(p3))
-	require.True(t, f.AddIfAllowed(p4))
+	require.True(t, f.TryAdd(p1))
+	require.True(t, f.TryAdd(p2))
+	require.True(t, f.TryAdd(p3))
+	require.True(t, f.TryAdd(p4))
 
 	stats := f.GetDiversityStats()
 	require.Len(t, stats, 2)

@@ -32,9 +32,10 @@ var legacyClassA = []string{"12.0.0.0/8", "17.0.0.0/8", "19.0.0.0/8", "38.0.0.0/
 
 // PeerGroupInfo represents the grouping info for a Peer.
 type PeerGroupInfo struct {
-	Id         peer.ID
-	Cpl        int
-	IPGroupKey PeerIPGroupKey
+	Id            peer.ID
+	Cpl           int
+	IPGroupKey    PeerIPGroupKey
+	isWhiteListed bool
 }
 
 // PeerIPGroupFilter is the interface that must be implemented by callers who want to
@@ -73,6 +74,9 @@ type Filter struct {
 	// An implementation of the `PeerIPGroupFilter` interface defined above.
 	pgm        PeerIPGroupFilter
 	peerGroups map[peer.ID][]PeerGroupInfo
+
+	// whitelist peers
+	wlpeers map[peer.ID]struct{}
 	// whitelisted Networks
 	wls cidranger.Ranger
 	// blacklisted Networks.
@@ -85,11 +89,10 @@ type Filter struct {
 	cplFnc func(peer.ID) int
 
 	cplPeerGroups map[int]map[peer.ID][]PeerIPGroupKey
-	// TODO This is for testing/logging purpose ONLY and can/should be removed later.
-	//cplRejections map[int]map[peer.ID]string
 }
 
-func NewFilter(pgm PeerIPGroupFilter, appName string, cplFnc func(peer.ID) int) (*Filter, error) {
+// NewFilter creates a Filter for Peer Diversity.
+func NewFilter(pgm PeerIPGroupFilter, logKey string, cplFnc func(peer.ID) int) (*Filter, error) {
 	if pgm == nil {
 		return nil, errors.New("peergroup implementation can not be nil")
 	}
@@ -109,13 +112,13 @@ func NewFilter(pgm PeerIPGroupFilter, appName string, cplFnc func(peer.ID) int) 
 	return &Filter{
 		pgm:           pgm,
 		peerGroups:    make(map[peer.ID][]PeerGroupInfo),
+		wlpeers:       make(map[peer.ID]struct{}),
 		wls:           cidranger.NewPCTrieRanger(),
 		bls:           cidranger.NewPCTrieRanger(),
 		legacyCidrs:   legacyCidrs,
-		logKey:        appName,
+		logKey:        logKey,
 		cplFnc:        cplFnc,
 		cplPeerGroups: make(map[int]map[peer.ID][]PeerIPGroupKey),
-		//cplRejections: make(map[int]map[peer.ID]string),
 	}, nil
 }
 
@@ -126,6 +129,9 @@ func (f *Filter) Remove(p peer.ID) {
 	cpl := f.cplFnc(p)
 
 	for _, info := range f.peerGroups[p] {
+		if info.isWhiteListed {
+			continue
+		}
 		f.pgm.Decrement(info)
 	}
 	f.peerGroups[p] = nil
@@ -137,8 +143,8 @@ func (f *Filter) Remove(p peer.ID) {
 	}
 }
 
-// returns true if peer was accepted and added to the Filter state.
-func (f *Filter) AddIfAllowed(p peer.ID) bool {
+// TryAdd attempts to add the peer to the Filter state and returns true if it's successful, false otherwise.
+func (f *Filter) TryAdd(p peer.ID) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -152,6 +158,7 @@ func (f *Filter) AddIfAllowed(p peer.ID) bool {
 	}
 
 	peerGroups := make([]PeerGroupInfo, 0, len(addrs))
+	isWhiteListed := false
 	for _, a := range addrs {
 		// if the IP belongs to a whitelisted network, allow it straight away.
 		// if the IP belongs to a blacklisted network, reject it.
@@ -176,7 +183,16 @@ func (f *Filter) AddIfAllowed(p peer.ID) bool {
 		}
 		group := PeerGroupInfo{Id: p, Cpl: cpl, IPGroupKey: key}
 
+		// is it a whitelisted peer
+		if _, ok := f.wlpeers[p]; ok {
+			isWhiteListed = true
+			peerGroups = append(peerGroups, group)
+			continue
+		}
+
+		// is it on a whitelisted network
 		if rs, _ := f.wls.ContainingNetworks(ip); len(rs) != 0 {
+			isWhiteListed = true
 			peerGroups = append(peerGroups, group)
 			continue
 		}
@@ -186,30 +202,24 @@ func (f *Filter) AddIfAllowed(p peer.ID) bool {
 		}
 
 		if !f.pgm.Allow(group) {
-			/*_, ok := f.cplRejections[cpl]
-			if !ok {
-				f.cplRejections[cpl] = make(map[peer.ID]string)
-			}
-			f.cplRejections[cpl][p] = ip.String()*/
 			return false
 		}
 
 		peerGroups = append(peerGroups, group)
 	}
 
-	_, ok := f.cplPeerGroups[cpl]
-	if !ok {
+	if _, ok := f.cplPeerGroups[cpl]; !ok {
 		f.cplPeerGroups[cpl] = make(map[peer.ID][]PeerIPGroupKey)
 	}
 
-	// add
 	for _, g := range peerGroups {
-		f.pgm.Increment(g)
+		g.isWhiteListed = isWhiteListed
+		if !g.isWhiteListed {
+			f.pgm.Increment(g)
+		}
 		f.peerGroups[p] = append(f.peerGroups[p], g)
 		f.cplPeerGroups[cpl][p] = append(f.cplPeerGroups[cpl][p], g.IPGroupKey)
 	}
-
-	//delete(f.cplRejections[cpl], p)
 
 	return true
 }
@@ -238,6 +248,17 @@ func (f *Filter) WhitelistIPNetwork(cidr string) error {
 	}
 
 	return f.wls.Insert(cidranger.NewBasicRangerEntry(*nn))
+}
+
+// WhiteListPeerIds will always allow the peers given here.
+// This will always override the blacklist.
+func (f *Filter) WhitelistPeers(peers ...peer.ID) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	for _, p := range peers {
+		f.wlpeers[p] = struct{}{}
+	}
 }
 
 // returns the PeerIPGroupKey to which the given IP belongs.

@@ -170,7 +170,7 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 	// if we aren't able to find a place for the peer in the table,
 	// we will simply remove it from the Filter later.
 	if rt.df != nil {
-		if !rt.df.AddIfAllowed(p) {
+		if !rt.df.TryAdd(p) {
 			return false, errors.New("peer rejected by the diversity filter")
 		}
 	}
@@ -463,11 +463,13 @@ func (rt *RoutingTable) Print() {
 	rt.tabLock.RUnlock()
 }
 
-// PrintDiversityStats prints the routing table peer diversity stats
-func (rt *RoutingTable) PrintDiversityStats() {
+// GetDiversityStats returns the diversity stats for the Routing Table if a diversity Filter
+// is configured.
+func (rt *RoutingTable) GetDiversityStats() []peerdiversity.CplDiversityStats {
 	if rt.df != nil {
-		rt.df.PrintStats()
+		return rt.df.GetDiversityStats()
 	}
+	return nil
 }
 
 // the caller is responsible for the locking
