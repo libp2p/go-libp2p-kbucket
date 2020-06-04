@@ -26,6 +26,9 @@ type PeerInfo struct {
 
 	// Id of the peer in the DHT XOR keyspace
 	dhtId ID
+
+	// if a bucket is full, this peer can be replaced to make space for a new peer.
+	replaceable bool
 }
 
 // bucket holds a list of peers.
@@ -74,6 +77,14 @@ func (b *bucket) min(lessThan func(p1 *PeerInfo, p2 *PeerInfo) bool) *PeerInfo {
 	}
 
 	return minVal
+}
+
+// updateAllWith updates all the peers in the bucket by applying the given update function.
+func (b *bucket) updateAllWith(updateFnc func(p *PeerInfo)) {
+	for e := b.list.Front(); e != nil; e = e.Next() {
+		val := e.Value.(*PeerInfo)
+		updateFnc(val)
+	}
 }
 
 // return the Ids of all the peers in the bucket.

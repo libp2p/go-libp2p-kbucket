@@ -132,15 +132,15 @@ func (rt *RoutingTable) NPeersForCpl(cpl uint) int {
 // the boolean value will ALWAYS be false i.e. the peer wont be added to the Routing Table it it's not already there.
 //
 // A return value of false with error=nil indicates that the peer ALREADY exists in the Routing Table.
-func (rt *RoutingTable) TryAddPeer(p peer.ID, queryPeer bool) (bool, error) {
+func (rt *RoutingTable) TryAddPeer(p peer.ID, queryPeer bool, isReplaceable bool) (bool, error) {
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
 
-	return rt.addPeer(p, queryPeer)
+	return rt.addPeer(p, queryPeer, isReplaceable)
 }
 
 // locking is the responsibility of the caller
-func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
+func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (bool, error) {
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
 
@@ -183,6 +183,7 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 			LastSuccessfulOutboundQueryAt: now,
 			AddedAt:                       now,
 			dhtId:                         ConvertPeerID(p),
+			replaceable:                   isReplaceable,
 		})
 		rt.PeerAdded(p)
 		return true, nil
@@ -203,6 +204,7 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 				LastSuccessfulOutboundQueryAt: now,
 				AddedAt:                       now,
 				dhtId:                         ConvertPeerID(p),
+				replaceable:                   isReplaceable,
 			})
 			rt.PeerAdded(p)
 			return true, nil
@@ -210,20 +212,23 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 	}
 
 	// the bucket to which the peer belongs is full. Let's try to find a peer
-	// in that bucket with a LastSuccessfulOutboundQuery value above the maximum threshold and replace it.
-	minLast := bucket.min(func(first *PeerInfo, second *PeerInfo) bool {
-		return first.LastUsefulAt.Before(second.LastUsefulAt)
+	// in that bucket which is replaceable.
+	// we don't really need a stable sort here as it dosen't matter which peer we evict
+	// as long as it's a replaceable peer.
+	replaceablePeer := bucket.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
+		return p1.replaceable
 	})
 
-	if time.Since(minLast.LastUsefulAt) > rt.usefulnessGracePeriod {
+	if replaceablePeer != nil && replaceablePeer.replaceable {
 		// let's evict it and add the new peer
-		if rt.removePeer(minLast.Id) {
+		if rt.removePeer(replaceablePeer.Id) {
 			bucket.pushFront(&PeerInfo{
 				Id:                            p,
 				LastUsefulAt:                  lastUsefulAt,
 				LastSuccessfulOutboundQueryAt: now,
 				AddedAt:                       now,
 				dhtId:                         ConvertPeerID(p),
+				replaceable:                   isReplaceable,
 			})
 			rt.PeerAdded(p)
 			return true, nil
@@ -235,6 +240,21 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool) (bool, error) {
 		rt.df.Remove(p)
 	}
 	return false, ErrPeerRejectedNoCapacity
+}
+
+// MarkAllPeersIrreplaceable marks all peers in the routing table as irreplaceable
+// This means that we will never replace an existing peer in the table to make space for a new peer.
+// However, they can still be removed by calling the `RemovePeer` API.
+func (rt *RoutingTable) MarkAllPeersIrreplaceable() {
+	rt.tabLock.Lock()
+	defer rt.tabLock.Unlock()
+
+	for i := range rt.buckets {
+		b := rt.buckets[i]
+		b.updateAllWith(func(p *PeerInfo) {
+			p.replaceable = false
+		})
+	}
 }
 
 // GetPeerInfos returns the peer information that we've stored in the buckets
