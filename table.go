@@ -213,11 +213,11 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 
 	// the bucket to which the peer belongs is full. Let's try to find a peer
 	// in that bucket which is replaceable.
-	replaceablePeer := bucket.findFirst(func(p *PeerInfo) bool {
-		return p.replaceable
+	replaceablePeer := bucket.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
+		return p1.replaceable
 	})
 
-	if replaceablePeer != nil {
+	if replaceablePeer != nil && replaceablePeer.replaceable {
 		// let's evict it and add the new peer
 		if rt.removePeer(replaceablePeer.Id) {
 			bucket.pushFront(&PeerInfo{

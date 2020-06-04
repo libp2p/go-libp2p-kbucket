@@ -1,37 +1,40 @@
 package kbucket
 
 import (
-	"github.com/libp2p/go-libp2p-core/test"
-	"github.com/stretchr/testify/require"
 	"testing"
+	"time"
+
+	"github.com/libp2p/go-libp2p-core/test"
+
+	"github.com/stretchr/testify/require"
 )
 
-func TestBucketFindFirst(t *testing.T) {
+func TestBucketMinimum(t *testing.T) {
 	t.Parallel()
 
 	b := newBucket()
-	require.Nil(t, b.findFirst(func(p1 *PeerInfo) bool { return true }))
+	require.Nil(t, b.min(func(p1 *PeerInfo, p2 *PeerInfo) bool { return true }))
 
 	pid1 := test.RandPeerIDFatal(t)
 	pid2 := test.RandPeerIDFatal(t)
 	pid3 := test.RandPeerIDFatal(t)
 
-	// first is replacable
-	b.pushFront(&PeerInfo{Id: pid1, replaceable: true})
-	require.Equal(t, pid1, b.findFirst(func(p *PeerInfo) bool {
-		return p.replaceable
+	// first is min
+	b.pushFront(&PeerInfo{Id: pid1, LastUsefulAt: time.Now()})
+	require.Equal(t, pid1, b.min(func(first *PeerInfo, second *PeerInfo) bool {
+		return first.LastUsefulAt.Before(second.LastUsefulAt)
 	}).Id)
 
-	// above peer is stll the replacable one
-	b.pushFront(&PeerInfo{Id: pid2, replaceable: false})
-	require.Equal(t, pid1, b.findFirst(func(p *PeerInfo) bool {
-		return p.replaceable
+	// first is till min
+	b.pushFront(&PeerInfo{Id: pid2, LastUsefulAt: time.Now().AddDate(1, 0, 0)})
+	require.Equal(t, pid1, b.min(func(first *PeerInfo, second *PeerInfo) bool {
+		return first.LastUsefulAt.Before(second.LastUsefulAt)
 	}).Id)
 
-	// new peer is replacable.
-	b.pushFront(&PeerInfo{Id: pid3, replaceable: true})
-	require.Equal(t, pid3, b.findFirst(func(p *PeerInfo) bool {
-		return p.replaceable
+	// second is the min
+	b.pushFront(&PeerInfo{Id: pid3, LastUsefulAt: time.Now().AddDate(-1, 0, 0)})
+	require.Equal(t, pid3, b.min(func(first *PeerInfo, second *PeerInfo) bool {
+		return first.LastUsefulAt.Before(second.LastUsefulAt)
 	}).Id)
 }
 
