@@ -213,6 +213,8 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 
 	// the bucket to which the peer belongs is full. Let's try to find a peer
 	// in that bucket which is replaceable.
+	// we don't really need a stable sort here as it dosen't matter which peer we evict
+	// as long as it's a replaceable peer.
 	replaceablePeer := bucket.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
 		return p1.replaceable
 	})

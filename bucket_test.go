@@ -25,7 +25,7 @@ func TestBucketMinimum(t *testing.T) {
 		return first.LastUsefulAt.Before(second.LastUsefulAt)
 	}).Id)
 
-	// first is till min
+	// first is still min
 	b.pushFront(&PeerInfo{Id: pid2, LastUsefulAt: time.Now().AddDate(1, 0, 0)})
 	require.Equal(t, pid1, b.min(func(first *PeerInfo, second *PeerInfo) bool {
 		return first.LastUsefulAt.Before(second.LastUsefulAt)
