@@ -13,7 +13,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr-net"
 
-	"github.com/yl2chen/cidranger"
+	"github.com/libp2p/go-cidranger"
 )
 
 var dfLog = logging.Logger("diversityFilter")
