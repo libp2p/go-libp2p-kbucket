@@ -3,17 +3,18 @@ package peerdiversity
 import (
 	"errors"
 	"fmt"
-	asnutil "github.com/libp2p/go-libp2p-asn-util"
-	"github.com/libp2p/go-libp2p-core/peer"
 	"net"
 	"sort"
 	"sync"
 
+	"github.com/libp2p/go-libp2p-core/peer"
+
+	"github.com/libp2p/go-cidranger"
+	asnutil "github.com/libp2p/go-libp2p-asn-util"
+
 	logging "github.com/ipfs/go-log"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr-net"
-
-	"github.com/libp2p/go-cidranger"
 )
 
 var dfLog = logging.Logger("diversityFilter")
@@ -36,10 +37,9 @@ var legacyClassA = []string{"12.0.0.0/8", "17.0.0.0/8", "19.0.0.0/8", "38.0.0.0/
 
 // PeerGroupInfo represents the grouping info for a Peer.
 type PeerGroupInfo struct {
-	Id            peer.ID
-	Cpl           int
-	IPGroupKey    PeerIPGroupKey
-	isWhiteListed bool
+	Id         peer.ID
+	Cpl        int
+	IPGroupKey PeerIPGroupKey
 }
 
 // PeerIPGroupFilter is the interface that must be implemented by callers who want to
@@ -49,10 +49,7 @@ type PeerIPGroupFilter interface {
 	// Allow is called by the Filter to test if a peer with the given
 	// grouping info should be allowed/rejected by the Filter. This will be called ONLY
 	// AFTER the peer has successfully passed all of the Filter's internal checks.
-	// Note: If the peer is deemed accepted because of a whitelisting criteria configured on the Filter,
-	// the peer will be allowed by the Filter without calling this function.
-	// Similarly, if the peer is deemed rejected because of a blacklisting criteria
-	// configured on the Filter, the peer will be rejected without calling this function.
+	// Note: If the peer is whitelisted on the Filter, the peer will be allowed by the Filter without calling this function.
 	Allow(PeerGroupInfo) (allow bool)
 
 	// Increment is called by the Filter when a peer with the given Grouping Info.
@@ -70,8 +67,8 @@ type PeerIPGroupFilter interface {
 	PeerAddresses(peer.ID) []ma.Multiaddr
 }
 
-// Filter is a peer diversity filter that accepts or rejects peers based on the blacklisting/whitelisting
-// rules configured AND the diversity policies defined by the implementation of the PeerIPGroupFilter interface
+// Filter is a peer diversity filter that accepts or rejects peers based on the whitelisting rules configured
+// AND the diversity policies defined by the implementation of the PeerIPGroupFilter interface
 // passed to it.
 type Filter struct {
 	mu sync.Mutex
@@ -79,12 +76,9 @@ type Filter struct {
 	pgm        PeerIPGroupFilter
 	peerGroups map[peer.ID][]PeerGroupInfo
 
-	// whitelist peers
+	// whitelisted peers
 	wlpeers map[peer.ID]struct{}
-	// whitelisted Networks
-	wls cidranger.Ranger
-	// blacklisted Networks.
-	bls cidranger.Ranger
+
 	// legacy IPv4 Class A networks.
 	legacyCidrs cidranger.Ranger
 
@@ -119,8 +113,6 @@ func NewFilter(pgm PeerIPGroupFilter, logKey string, cplFnc func(peer.ID) int) (
 		pgm:           pgm,
 		peerGroups:    make(map[peer.ID][]PeerGroupInfo),
 		wlpeers:       make(map[peer.ID]struct{}),
-		wls:           cidranger.NewPCTrieRanger(),
-		bls:           cidranger.NewPCTrieRanger(),
 		legacyCidrs:   legacyCidrs,
 		logKey:        logKey,
 		cplFnc:        cplFnc,
@@ -136,9 +128,6 @@ func (f *Filter) Remove(p peer.ID) {
 	cpl := f.cplFnc(p)
 
 	for _, info := range f.peerGroups[p] {
-		if info.isWhiteListed {
-			continue
-		}
 		f.pgm.Decrement(info)
 	}
 	f.peerGroups[p] = nil
@@ -155,6 +144,10 @@ func (f *Filter) TryAdd(p peer.ID) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	if _, ok := f.wlpeers[p]; ok {
+		return true
+	}
+
 	cpl := f.cplFnc(p)
 
 	// don't allow peers for which we can't determine addresses.
@@ -165,11 +158,7 @@ func (f *Filter) TryAdd(p peer.ID) bool {
 	}
 
 	peerGroups := make([]PeerGroupInfo, 0, len(addrs))
-	isWhiteListed := false
 	for _, a := range addrs {
-		// if the IP belongs to a whitelisted network, allow it straight away.
-		// if the IP belongs to a blacklisted network, reject it.
-		// Otherwise, call the `PeerIPGroupFilter.Allow` hook to determine if we should allow/reject the peer.
 		ip, err := manet.ToIP(a)
 		if err != nil {
 			dfLog.Errorw("failed to parse IP from multiaddr", "appKey", f.logKey,
@@ -185,28 +174,10 @@ func (f *Filter) TryAdd(p peer.ID) bool {
 			return false
 		}
 		if len(key) == 0 {
-			dfLog.Errorw("group key is empty", "appKey", f.logKey, "ip", ip.String(), "peer", p)
+			dfLog.Debugw("group key is empty", "appKey", f.logKey, "ip", ip.String(), "peer", p)
 			return false
 		}
 		group := PeerGroupInfo{Id: p, Cpl: cpl, IPGroupKey: key}
-
-		// is it a whitelisted peer
-		if _, ok := f.wlpeers[p]; ok {
-			isWhiteListed = true
-			peerGroups = append(peerGroups, group)
-			continue
-		}
-
-		// is it on a whitelisted network
-		if rs, _ := f.wls.ContainingNetworks(ip); len(rs) != 0 {
-			isWhiteListed = true
-			peerGroups = append(peerGroups, group)
-			continue
-		}
-
-		if rs, _ := f.bls.ContainingNetworks(ip); len(rs) != 0 {
-			return false
-		}
 
 		if !f.pgm.Allow(group) {
 			return false
@@ -220,10 +191,8 @@ func (f *Filter) TryAdd(p peer.ID) bool {
 	}
 
 	for _, g := range peerGroups {
-		g.isWhiteListed = isWhiteListed
-		if !g.isWhiteListed {
-			f.pgm.Increment(g)
-		}
+		f.pgm.Increment(g)
+
 		f.peerGroups[p] = append(f.peerGroups[p], g)
 		f.cplPeerGroups[cpl][p] = append(f.cplPeerGroups[cpl][p], g.IPGroupKey)
 	}
@@ -231,34 +200,7 @@ func (f *Filter) TryAdd(p peer.ID) bool {
 	return true
 }
 
-// BlacklistIPv4Network will blacklist the IPv4/6 network with the given IP CIDR.
-func (f *Filter) BlacklistIPNetwork(cidr string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	_, nn, err := net.ParseCIDR(cidr)
-	if err != nil {
-		return err
-	}
-	return f.bls.Insert(cidranger.NewBasicRangerEntry(*nn))
-}
-
-// WhitelistIPNetwork will always allow IP addresses from networks with the given CIDR.
-// This will always override the blacklist.
-func (f *Filter) WhitelistIPNetwork(cidr string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	_, nn, err := net.ParseCIDR(cidr)
-	if err != nil {
-		return err
-	}
-
-	return f.wls.Insert(cidranger.NewBasicRangerEntry(*nn))
-}
-
-// WhiteListPeerIds will always allow the peers given here.
-// This will always override the blacklist.
+// WhitelistPeers will always allow the given peers.
 func (f *Filter) WhitelistPeers(peers ...peer.ID) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
