@@ -148,19 +148,16 @@ func TestDiversityFilter(t *testing.T) {
 			},
 			isWhitelisted: true,
 		},
-
-		"whitelisted network": {
+		"whitelist peers works even if peer has no addresses": {
 			peersForTest: func() []peer.ID {
 				return []peer.ID{"p1", "p2"}
 			},
 			mFnc: func(m *mockPeerGroupFilter) {
 				m.peerAddressFunc = func(id peer.ID) []ma.Multiaddr {
 					if id == "p1" {
-						return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0"),
-							ma.StringCast("/ip4/127.0.0.1/tcp/0")}
+						return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0")}
 					} else {
-						return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0"),
-							ma.StringCast("/ip4/192.168.1.1/tcp/0")}
+						return nil
 					}
 				}
 
@@ -169,47 +166,13 @@ func TestDiversityFilter(t *testing.T) {
 				}
 			},
 			allowed: map[peer.ID]bool{
-				"p1": true,
-				"p2": false,
+				"p1": false,
+				"p2": true,
 			},
 			fFnc: func(f *Filter) {
-				err := f.WhitelistIPNetwork("127.0.0.1/16")
-				if err != nil {
-					t.Fatal(err)
-				}
+				f.WhitelistPeers(peer.ID("p2"))
 			},
 			isWhitelisted: true,
-		},
-
-		"blacklisting": {
-			peersForTest: func() []peer.ID {
-				return []peer.ID{"p1", "p2"}
-			},
-			mFnc: func(m *mockPeerGroupFilter) {
-				m.peerAddressFunc = func(id peer.ID) []ma.Multiaddr {
-					if id == "p1" {
-						return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0"),
-							ma.StringCast("/ip4/127.0.0.1/tcp/0")}
-					} else {
-						return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0"),
-							ma.StringCast("/ip4/192.168.1.1/tcp/0")}
-					}
-				}
-
-				m.allowFnc = func(g PeerGroupInfo) bool {
-					return true
-				}
-			},
-			allowed: map[peer.ID]bool{
-				"p1": true,
-				"p2": false,
-			},
-			fFnc: func(f *Filter) {
-				err := f.BlacklistIPNetwork("192.168.1.1/16")
-				if err != nil {
-					t.Fatal(err)
-				}
-			},
 		},
 
 		"peer has no addresses": {
