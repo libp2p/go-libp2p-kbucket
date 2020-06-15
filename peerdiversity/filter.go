@@ -174,7 +174,7 @@ func (f *Filter) TryAdd(p peer.ID) bool {
 			return false
 		}
 		if len(key) == 0 {
-			dfLog.Debugw("group key is empty", "appKey", f.logKey, "ip", ip.String(), "peer", p)
+			dfLog.Errorw("group key is empty", "appKey", f.logKey, "ip", ip.String(), "peer", p)
 			return false
 		}
 		group := PeerGroupInfo{Id: p, Cpl: cpl, IPGroupKey: key}
@@ -220,6 +220,13 @@ func (f *Filter) ipGroupKey(ip net.IP) (PeerIPGroupKey, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to fetch ASN for IPv6 addr %s: %w", ip.String(), err)
 		}
+
+		// if no ASN found then fallback on using the /32 prefix
+		if len(s) == 0 {
+			dfLog.Debugw("ASN not known", "appKey", f.logKey, "ip", ip)
+			s = fmt.Sprintf("unknown ASN: %s", net.CIDRMask(32, 128).String())
+		}
+
 		return PeerIPGroupKey(s), nil
 	default:
 		// If it belongs to a legacy Class 8, we return the /8 prefix as the key
