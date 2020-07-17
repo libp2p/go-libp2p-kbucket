@@ -1,9 +1,9 @@
 package kbucket
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -34,6 +34,13 @@ func (rt *RoutingTable) GetTrackedCplsForRefresh() []time.Time {
 	return cpls
 }
 
+func randUint16() (uint16, error) {
+	// Read a random prefix.
+	var prefixBytes [2]byte
+	_, err := rand.Read(prefixBytes[:])
+	return binary.BigEndian.Uint16(prefixBytes[:]), err
+}
+
 // GenRandPeerID generates a random peerID for a given Cpl
 func (rt *RoutingTable) GenRandPeerID(targetCpl uint) (peer.ID, error) {
 	if targetCpl > maxCplForRefresh {
@@ -46,7 +53,10 @@ func (rt *RoutingTable) GenRandPeerID(targetCpl uint) (peer.ID, error) {
 	// Hence, to achieve a targetPrefix `T`, we must toggle the (T+1)th bit in L & then copy (T+1) bits from L
 	// to our randomly generated prefix.
 	toggledLocalPrefix := localPrefix ^ (uint16(0x8000) >> targetCpl)
-	randPrefix := uint16(rand.Uint32())
+	randPrefix, err := randUint16()
+	if err != nil {
+		return "", err
+	}
 
 	// Combine the toggled local prefix and the random bits at the correct offset
 	// such that ONLY the first `targetCpl` bits match the local ID.
