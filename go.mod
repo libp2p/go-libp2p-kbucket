@@ -9,7 +9,6 @@ require (
 	github.com/libp2p/go-libp2p-peerstore v0.2.6
 	github.com/minio/sha256-simd v0.1.1
 	github.com/multiformats/go-multiaddr v0.3.1
-	github.com/multiformats/go-multiaddr-net v0.2.0
 	github.com/multiformats/go-multihash v0.0.14
 	github.com/stretchr/testify v1.5.1
 )
