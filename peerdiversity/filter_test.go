@@ -278,10 +278,10 @@ func TestGetDiversityStats(t *testing.T) {
 	p4 := peer.ID("bb")
 
 	paddrs := map[peer.ID][]ma.Multiaddr{
-		p1: []ma.Multiaddr{ma.StringCast("/ip4/17.0.0.1/tcp/0"), ma.StringCast("/ip4/19.1.1.0")},
-		p2: []ma.Multiaddr{ma.StringCast("/ip4/18.1.0.1/tcp/0")},
-		p3: []ma.Multiaddr{ma.StringCast("/ip4/19.2.0.1/tcp/0")},
-		p4: []ma.Multiaddr{ma.StringCast("/ip4/20.3.0.1/tcp/0")},
+		p1: {ma.StringCast("/ip4/17.0.0.1/tcp/0"), ma.StringCast("/ip4/19.1.1.0")},
+		p2: {ma.StringCast("/ip4/18.1.0.1/tcp/0")},
+		p3: {ma.StringCast("/ip4/19.2.0.1/tcp/0")},
+		p4: {ma.StringCast("/ip4/20.3.0.1/tcp/0")},
 	}
 
 	m := newMockPeerGroupFilter()
