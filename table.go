@@ -264,9 +264,7 @@ func (rt *RoutingTable) GetPeerInfos() []PeerInfo {
 
 	var pis []PeerInfo
 	for _, b := range rt.buckets {
-		for _, p := range b.peers() {
-			pis = append(pis, p)
-		}
+		pis = append(pis, b.peers()...)
 	}
 	return pis
 }

@@ -20,8 +20,6 @@ type mockPeerGroupFilter struct {
 
 	peerAddressFunc func(p peer.ID) []ma.Multiaddr
 	allowFnc        func(g PeerGroupInfo) bool
-	incrementFunc   func(g PeerGroupInfo)
-	dectementFunc   func(g PeerGroupInfo)
 }
 
 func (m *mockPeerGroupFilter) Allow(g PeerGroupInfo) (allow bool) {
