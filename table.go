@@ -16,6 +16,8 @@ import (
 	logging "github.com/ipfs/go-log"
 )
 
+test()
+
 var log = logging.Logger("table")
 
 var ErrPeerRejectedHighLatency = errors.New("peer rejected; latency too high")
