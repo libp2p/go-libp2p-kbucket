@@ -1,7 +1,6 @@
 package kbucket
 
 import (
-	"bytes"
 	"errors"
 
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -20,10 +19,6 @@ var ErrLookupFailure = errors.New("failed to find any peer in table")
 // The type dht.ID signifies that its contents have been hashed from either a
 // peer.ID or a util.Key. This unifies the keyspace
 type ID []byte
-
-func (id ID) equal(other ID) bool {
-	return bytes.Equal(id, other)
-}
 
 func (id ID) less(other ID) bool {
 	a := ks.Key{Space: ks.XORKeySpace, Bytes: id}

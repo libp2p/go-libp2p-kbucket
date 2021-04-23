@@ -92,11 +92,11 @@ func TestDistancesAndCenterSorting(t *testing.T) {
 		return big.NewInt(a).Cmp(b)
 	}
 
-	if 0 != cmp(0, keys[2].Distance(keys[3])) {
+	if cmp(0, keys[2].Distance(keys[3])) != 0 {
 		t.Errorf("distance calculation wrong: %v", keys[2].Distance(keys[3]))
 	}
 
-	if 0 != cmp(1, keys[2].Distance(keys[4])) {
+	if cmp(1, keys[2].Distance(keys[4])) != 0 {
 		t.Errorf("distance calculation wrong: %v", keys[2].Distance(keys[4]))
 	}
 
