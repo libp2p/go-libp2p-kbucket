@@ -7,17 +7,14 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/test"
 
-	pstore "github.com/libp2p/go-libp2p-peerstore"
-
 	"github.com/stretchr/testify/require"
 )
 
 func TestGenRandPeerID(t *testing.T) {
 	t.Parallel()
+	local := ConvertPeerID(test.RandPeerIDFatal(t))
 
-	local := test.RandPeerIDFatal(t)
-	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(1, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
+	rt, err := NewRoutingTable(baseTestOpts(1, local))
 	require.NoError(t, err)
 
 	// generate above maxCplForRefresh fails
@@ -44,8 +41,8 @@ func TestRefreshAndGetTrackedCpls(t *testing.T) {
 	)
 
 	local := test.RandPeerIDFatal(t)
-	m := pstore.NewMetrics()
-	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
+
+	rt, err := NewRoutingTable(baseTestOpts(2, ConvertPeerID(local)))
 	require.NoError(t, err)
 
 	// fetch cpl's

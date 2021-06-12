@@ -60,24 +60,16 @@ type RoutingTable struct {
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
-func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerstore.Metrics, usefulnessGracePeriod time.Duration,
-	df *peerdiversity.Filter) (*RoutingTable, error) {
+func NewRoutingTable(opts ...func(*RoutingTable) *RoutingTable) (*RoutingTable, error) {
 	rt := &RoutingTable{
-		buckets:    []*bucket{newBucket()},
-		bucketsize: bucketsize,
-		local:      localID,
-
-		maxLatency: latency,
-		metrics:    m,
-
+		buckets: []*bucket{newBucket()},
 		cplRefreshedAt: make(map[uint]time.Time),
-
 		PeerRemoved: func(peer.ID) {},
-		PeerAdded:   func(peer.ID) {},
+		PeerAdded: func(peer.ID) {},
+	}
 
-		usefulnessGracePeriod: usefulnessGracePeriod,
-
-		df: df,
+	for _, opt := range opts {
+		rt = opt(rt)
 	}
 
 	rt.ctx, rt.ctxCancel = context.WithCancel(context.Background())
