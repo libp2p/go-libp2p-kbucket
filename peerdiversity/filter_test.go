@@ -76,12 +76,7 @@ func TestDiversityFilter(t *testing.T) {
 				m.peerAddressFunc = func(id peer.ID) []ma.Multiaddr {
 					return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0")}
 				}
-				m.allowFnc = func(g PeerGroupInfo) bool {
-					if g.Id == "p1" {
-						return true
-					}
-					return false
-				}
+				m.allowFnc = func(g PeerGroupInfo) bool { return g.Id == "p1" }
 			},
 			allowed: map[peer.ID]bool{
 				"p1": true,
@@ -99,19 +94,11 @@ func TestDiversityFilter(t *testing.T) {
 					if id == "p1" {
 						return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0"),
 							ma.StringCast("/ip4/127.0.0.1/tcp/0")}
-					} else {
-						return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0"),
-							ma.StringCast("/ip4/192.168.1.1/tcp/0")}
 					}
-
+					return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0"),
+						ma.StringCast("/ip4/192.168.1.1/tcp/0")}
 				}
-				m.allowFnc = func(g PeerGroupInfo) bool {
-					if g.IPGroupKey == "127.0.0.0" {
-						return true
-					}
-
-					return false
-				}
+				m.allowFnc = func(g PeerGroupInfo) bool { return g.IPGroupKey == "127.0.0.0" }
 			},
 			allowed: map[peer.ID]bool{
 				"p1": true,
