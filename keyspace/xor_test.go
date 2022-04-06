@@ -107,7 +107,7 @@ func TestDistancesAndCenterSorting(t *testing.T) {
 		t.Errorf("bytes should be the same. %v == %v", d1.Bytes(), d2)
 	}
 
-	if -1 != cmp(2<<32, keys[2].Distance(keys[5])) {
+	if cmp(2<<32, keys[2].Distance(keys[5])) != -1 {
 		t.Errorf("2<<32 should be smaller")
 	}
 
