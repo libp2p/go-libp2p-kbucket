@@ -27,9 +27,9 @@ type asnStore interface {
 // A peer has one PeerIPGroupKey per address. Thus, a peer can belong to MULTIPLE Groups if it has
 // multiple addresses.
 // For now, given a peer address, our grouping mechanism is as follows:
-// 1. For IPv6 addresses, we group by the ASN of the IP address.
-// 2. For IPv4 addresses, all addresses that belong to same legacy (Class A)/8 allocations
-//    OR share the same /16 prefix are in the same group.
+//  1. For IPv6 addresses, we group by the ASN of the IP address.
+//  2. For IPv4 addresses, all addresses that belong to same legacy (Class A)/8 allocations
+//     OR share the same /16 prefix are in the same group.
 type PeerIPGroupKey string
 
 // https://en.wikipedia.org/wiki/List_of_assigned_/8_IPv4_address_blocks
