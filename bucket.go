@@ -6,7 +6,7 @@ import (
 	"container/list"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 // PeerInfo holds all related information for a peer in the K-Bucket.

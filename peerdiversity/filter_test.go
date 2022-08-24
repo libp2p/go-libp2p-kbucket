@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
@@ -227,7 +227,7 @@ type mockAsnStore struct {
 	reply string
 }
 
-func (m *mockAsnStore) AsnForIPv6(ip net.IP) (string, error) {
+func (m *mockAsnStore) AsnForIPv6(net.IP) (string, error) {
 	return m.reply, nil
 }
 

@@ -48,7 +48,7 @@ func main() {
 	}
 
 	printf := func(s string, args ...interface{}) {
-		_, err := fmt.Fprintf(f, s, args...)
+		_, err = fmt.Fprintf(f, s, args...)
 		if err != nil {
 			panic(err)
 		}
@@ -66,5 +66,7 @@ func main() {
 		printf("%d,", j)
 	}
 	printf("\n}")
-	f.Close()
+	if err = f.Close(); err != nil {
+		panic(err)
+	}
 }
