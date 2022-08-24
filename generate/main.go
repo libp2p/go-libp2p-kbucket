@@ -66,5 +66,5 @@ func main() {
 		printf("%d,", j)
 	}
 	printf("\n}")
-	f.Close()
+	_ = f.Close()
 }

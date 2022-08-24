@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/libp2p/go-cidranger"
 	asnutil "github.com/libp2p/go-libp2p-asn-util"
@@ -153,7 +153,7 @@ func (f *Filter) TryAdd(p peer.ID) bool {
 	// don't allow peers for which we can't determine addresses.
 	addrs := f.pgm.PeerAddresses(p)
 	if len(addrs) == 0 {
-		dfLog.Debugw("no addresses found for peer", "appKey", f.logKey, "peer", p.Pretty())
+		dfLog.Debugw("no addresses found for peer", "appKey", f.logKey, "peer", p.String())
 		return false
 	}
 
