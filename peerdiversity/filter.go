@@ -153,7 +153,7 @@ func (f *Filter) TryAdd(p peer.ID) bool {
 	// don't allow peers for which we can't determine addresses.
 	addrs := f.pgm.PeerAddresses(p)
 	if len(addrs) == 0 {
-		dfLog.Debugw("no addresses found for peer", "appKey", f.logKey)
+		dfLog.Debugw("no addresses found for peer", "appKey", f.logKey, "peer", p)
 		return false
 	}
 
