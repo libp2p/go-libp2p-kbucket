@@ -112,6 +112,49 @@ func (rt *RoutingTable) NPeersForCpl(cpl uint) int {
 	}
 }
 
+// UsefulPeer verifies whether the given peer.ID would be a good fit for the routing table
+// It returns true if the bucket corresponding to peer.ID isn't full, if it contains
+// replaceable peers or if it is the last bucket and adding a peer would unfold it.
+func (rt *RoutingTable) UsefulPeer(p peer.ID) bool {
+	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
+
+	// bucket corresponding to p
+	bucketID := rt.bucketIdForPeer(p)
+	bucket := rt.buckets[bucketID]
+
+	// bucket isn't full
+	if bucket.len() < rt.bucketsize {
+		return true
+	}
+
+	// find and returns a replaceable peer (if any)
+	replaceablePeer := bucket.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
+		return p1.replaceable
+	})
+	if replaceablePeer != nil && replaceablePeer.replaceable {
+		// at least 1 peer is replaceable
+		return true
+	}
+
+	// the last bucket potentially contains peer ids with different CPL,
+	// and can be split in 2 buckets if needed
+	if bucketID == len(rt.buckets)-1 {
+		peers := bucket.peers()
+		cpl := CommonPrefixLen(rt.local, ConvertPeerID(p))
+		for _, peer := range peers {
+			// if at least 2 peers have a different CPL, the new peer is
+			// useful and will trigger a bucket split
+			if CommonPrefixLen(rt.local, peer.dhtId) != cpl {
+				return true
+			}
+		}
+	}
+
+	// the appropriate bucket is full of non replaceable peers
+	return false
+}
+
 // TryAddPeer tries to add a peer to the Routing table.
 // If the peer ALREADY exists in the Routing Table and has been queried before, this call is a no-op.
 // If the peer ALREADY exists in the Routing Table but hasn't been queried before, we set it's LastUsefulAt value to
