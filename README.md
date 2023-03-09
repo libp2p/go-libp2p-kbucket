@@ -21,6 +21,12 @@ This repository falls under the libp2p [Code of Conduct](https://github.com/libp
 
 [![](https://cdn.rawgit.com/libp2p/community/master/img/contribute.gif)](https://github.com/libp2p/community/blob/master/CONTRIBUTE.md)
 
+## Maintainers
+
+- [@ipfs/kubo-maintainers](https://github.com/orgs/ipfs/teams/kubo-maintainers)
+- [@libp2p/go-libp2p-maintainers](https://github.com/orgs/libp2p/teams/go-libp2p-maintainers)
+- [@guillaumemichel](https://github.com/guillaumemichel)
+
 ## License
 
 MIT
