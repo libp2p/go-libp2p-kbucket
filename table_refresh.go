@@ -65,9 +65,56 @@ func (rt *RoutingTable) GenRandPeerID(targetCpl uint) (peer.ID, error) {
 
 	// Convert to a known peer ID.
 	key := keyPrefixMap[targetPrefix]
-	id := [34]byte{mh.SHA2_256, 32}
+	id := [Keysize + 2]byte{mh.SHA2_256, Keysize}
 	binary.BigEndian.PutUint32(id[2:], key)
 	return peer.ID(id[:]), nil
+}
+
+// GenRandomKey generates a random key matching a provided Common Prefix Length (Cpl) wrt. the local identity
+func (rt *RoutingTable) GenRandomKey(targetCpl uint) (ID, error) {
+	// targetCpl cannot be larger than the key size in bits
+	if targetCpl >= Keysize*8 {
+		return nil, fmt.Errorf("cannot generate peer ID for Cpl greater than key length")
+	}
+
+	// the generated key must match the targetCpl first bits of the local key,
+	// the following bit is the inverse of the local key's bit at position targetCpl+1
+	// and the remaining bits are randomly generated
+	//
+	// The returned ID takes the first targetCpl/8 bytes from the local key, the next byte is
+	// targetCpl%8 bits from the local key, 1 bit from the local key inverted and the remaining
+	// bits are random, and the last bytes are random
+
+	// generate random bytes
+	nRandBytes := Keysize - (targetCpl+1)/8
+	randBytes := make([]byte, nRandBytes)
+	_, err := rand.Read(randBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	// byte and bit offset for the given cpl
+	byteOffset := targetCpl / 8
+	bitOffset := targetCpl % 8
+
+	// copy the local key to a new slice
+	randKey := make([]byte, len(rt.local))
+	copy(randKey, []byte(rt.local))
+
+	// compute the mask for the local key, the first targetCpl bits must be the same as the local key
+	// hence the mask is 1s for bits up to targetCpl and 0s for the rest
+	localMask := (^byte(0)) << (8 - bitOffset)
+	// compute the bit that is flipped in the local key (at position targetCpl+1)
+	bucketBit := (byte(0x80) >> bitOffset) & ^rt.local[targetCpl/8]
+
+	// first bitOffset bits are the same as the local key, the next bit is flipped and the remaining bits are random
+	randKey[byteOffset] = (localMask & randKey[byteOffset]) | bucketBit | (randBytes[0] & ((^localMask) >> 1))
+	// the remaining bytes are random
+	for i := uint(1); i < nRandBytes; i++ {
+		randKey[byteOffset+i] = randBytes[i]
+	}
+
+	return randKey, nil
 }
 
 // ResetCplRefreshedAtForID resets the refresh time for the Cpl of the given ID.
