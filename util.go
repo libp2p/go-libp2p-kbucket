@@ -15,9 +15,6 @@ import (
 // behaviour
 var ErrLookupFailure = errors.New("failed to find any peer in table")
 
-// Keysize is the size of the Kademlia ID in bytes
-const Keysize = 32
-
 // ID for IpfsDHT is in the XORKeySpace
 //
 // The type dht.ID signifies that its contents have been hashed from either a
