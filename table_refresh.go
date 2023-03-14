@@ -89,13 +89,13 @@ func (rt *RoutingTable) GenRandomKey(targetCpl uint) (ID, error) {
 		return nil, err
 	}
 
-	remainingBits := targetCpl % 8
+	remainingBits := 8 - targetCpl%8
 	orig := rt.local[partialOffset]
 
-	origMask := ^uint8(0) << (8 - remainingBits)
+	origMask := ^uint8(0) << remainingBits
 	randMask := ^origMask >> 1
-	flippedBitOffset := remainingBits + 1
-	flippedBitMask := uint8(1) << (8 - flippedBitOffset)
+	flippedBitOffset := remainingBits - 1
+	flippedBitMask := uint8(1) << flippedBitOffset
 
 	// restore the remainingBits Most Significant Bits of orig
 	// and flip the flippedBitOffset-th bit of orig
