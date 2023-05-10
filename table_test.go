@@ -767,3 +767,21 @@ func BenchmarkFinds(b *testing.B) {
 		tab.Find(peers[i])
 	}
 }
+
+
+
+func TestBugFinder(t *testing.T) {
+	localID := test.RandPeerIDFatal(t)
+	rt, err := NewRoutingTable(1, ConvertPeerID(localID), time.Hour, pstore.NewMetrics(), NoOpThreshold, nil)
+	require.NoError(t, err)
+	p1, _ := rt.GenRandPeerID(1) // for any targetCtl > 0
+	p2, _ := rt.GenRandPeerID(1)
+
+	rt.TryAddPeer(p1, true, true)
+	rt.TryAddPeer(p2, true, true)
+
+	require.Equal(t, rt.Find(p1), peer.ID(""))
+	require.Equal(t, rt.Find(p2), p2)
+	require.Equal(t, rt.Size(), 1)
+
+}

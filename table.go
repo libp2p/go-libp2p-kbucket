@@ -222,6 +222,9 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 	if replaceablePeer != nil && replaceablePeer.replaceable {
 		// let's evict it and add the new peer
 		if rt.removePeer(replaceablePeer.Id) {
+			// bug fix :)
+			bucketID = rt.bucketIdForPeer(p)
+			bucket = rt.buckets[bucketID]
 			bucket.pushFront(&PeerInfo{
 				Id:                            p,
 				LastUsefulAt:                  lastUsefulAt,
