@@ -220,19 +220,24 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 	})
 
 	if replaceablePeer != nil && replaceablePeer.replaceable {
-		// let's evict it and add the new peer
-		if rt.removePeer(replaceablePeer.Id) {
-			bucket.pushFront(&PeerInfo{
-				Id:                            p,
-				LastUsefulAt:                  lastUsefulAt,
-				LastSuccessfulOutboundQueryAt: now,
-				AddedAt:                       now,
-				dhtId:                         ConvertPeerID(p),
-				replaceable:                   isReplaceable,
-			})
-			rt.PeerAdded(p)
-			return true, nil
-		}
+		// we found a replaceable peer, let's replace it with the new peer.
+
+		// add new peer to the bucket. needs to happen before we remove the replaceable peer
+		// as if the bucket size is 1, we will end up removing the only peer, and deleting
+		// the bucket.
+		bucket.pushFront(&PeerInfo{
+			Id:                            p,
+			LastUsefulAt:                  lastUsefulAt,
+			LastSuccessfulOutboundQueryAt: now,
+			AddedAt:                       now,
+			dhtId:                         ConvertPeerID(p),
+			replaceable:                   isReplaceable,
+		})
+		rt.PeerAdded(p)
+
+		// remove the replaceable peer
+		rt.removePeer(replaceablePeer.Id)
+		return true, nil
 	}
 
 	// we weren't able to find place for the peer, remove it from the filter state.

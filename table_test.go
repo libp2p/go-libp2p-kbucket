@@ -447,6 +447,24 @@ func TestTryAddPeer(t *testing.T) {
 
 }
 
+func TestReplacePeerWithBucketSize1(t *testing.T) {
+	localID := test.RandPeerIDFatal(t)
+	rt, err := NewRoutingTable(1, ConvertPeerID(localID), time.Hour, pstore.NewMetrics(), NoOpThreshold, nil)
+	require.NoError(t, err)
+	p1, _ := rt.GenRandPeerID(1) // for any targetCpl > 0
+	p2, _ := rt.GenRandPeerID(1)
+
+	rt.TryAddPeer(p1, true, true)
+	success, err := rt.TryAddPeer(p2, true, true)
+
+	require.NoError(t, err)
+	require.True(t, success)
+
+	require.Equal(t, peer.ID(""), rt.Find(p1))
+	require.Equal(t, p2, rt.Find(p2))
+	require.Equal(t, rt.Size(), 1)
+}
+
 func TestMarkAllPeersIrreplaceable(t *testing.T) {
 	t.Parallel()
 
