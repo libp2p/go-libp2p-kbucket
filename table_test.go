@@ -188,7 +188,6 @@ func TestUsefulPeer(t *testing.T) {
 	p, _ = rt.GenRandPeerID(1)
 	require.False(t, rt.UsefulPeer(p))
 	rt.TryAddPeer(p, true, false)
-
 }
 
 func TestEmptyBucketCollapse(t *testing.T) {
