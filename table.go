@@ -128,13 +128,13 @@ func (rt *RoutingTable) UsefulPeer(p peer.ID) bool {
 		return true
 	}
 
-	// find and returns a replaceable peer (if any)
-	replaceablePeer := bucket.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
-		return p1.replaceable
-	})
-	if replaceablePeer != nil && replaceablePeer.replaceable {
-		// at least 1 peer is replaceable
-		return true
+	// bucket is full, check if it contains replaceable peers
+	for e := bucket.list.Front(); e != nil; e = e.Next() {
+		peer := e.Value.(*PeerInfo)
+		if peer.replaceable {
+			// at least 1 peer is replaceable
+			return true
+		}
 	}
 
 	// the last bucket potentially contains peer ids with different CPL,
