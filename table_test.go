@@ -126,7 +126,7 @@ func TestNPeersForCpl(t *testing.T) {
 	require.Equal(t, 2, rt.NPeersForCpl(0))
 }
 
-func TestUsefulPeer(t *testing.T) {
+func TestUsefulNewPeer(t *testing.T) {
 	t.Parallel()
 	local := test.RandPeerIDFatal(t)
 	m := pstore.NewMetrics()
@@ -135,58 +135,60 @@ func TestUsefulPeer(t *testing.T) {
 
 	// add first peer to bucket 0
 	p, _ := rt.GenRandPeerID(0)
-	require.True(t, rt.UsefulPeer(p))
+	require.True(t, rt.UsefulNewPeer(p))
 	rt.TryAddPeer(p, true, false)
+	// first peer shouldn't be useful, as it is already in the rt
+	require.False(t, rt.UsefulNewPeer(p))
 
 	// add second peer to bucket 0
 	p, _ = rt.GenRandPeerID(0)
-	require.True(t, rt.UsefulPeer(p))
+	require.True(t, rt.UsefulNewPeer(p))
 	rt.TryAddPeer(p, true, false)
 
 	// bucket 0 (also last bucket) full with non replaceable peers
 	p, _ = rt.GenRandPeerID(0)
-	require.False(t, rt.UsefulPeer(p))
+	require.False(t, rt.UsefulNewPeer(p))
 
 	// bucket 0 is full, unfolding it
 	// add first peer to bucket 1
 	p, _ = rt.GenRandPeerID(1)
-	require.True(t, rt.UsefulPeer(p))
+	require.True(t, rt.UsefulNewPeer(p))
 	rt.TryAddPeer(p, true, false)
 
 	// add second peer to bucket 1
 	// cpl is 2, but bucket 1 is last bucket
 	p, _ = rt.GenRandPeerID(2)
-	require.True(t, rt.UsefulPeer(p))
+	require.True(t, rt.UsefulNewPeer(p))
 	rt.TryAddPeer(p, true, false)
 
 	// unfolding bucket 1
 	// adding second peer to bucket 2
 	p, _ = rt.GenRandPeerID(2)
-	require.True(t, rt.UsefulPeer(p))
+	require.True(t, rt.UsefulNewPeer(p))
 	rt.TryAddPeer(p, true, false)
 
 	// adding replaceable peer to bucket 1
 	// bucket 1 size: 1 -> 2
 	p, _ = rt.GenRandPeerID(1)
-	require.True(t, rt.UsefulPeer(p))
+	require.True(t, rt.UsefulNewPeer(p))
 	rt.TryAddPeer(p, true, true)
 
 	// adding replaceable peer to bucket 1
 	// bucket 1 size: 2 -> 2
 	p, _ = rt.GenRandPeerID(1)
-	require.True(t, rt.UsefulPeer(p))
+	require.True(t, rt.UsefulNewPeer(p))
 	rt.TryAddPeer(p, true, true)
 
 	// adding non replaceable peer to bucket 1
 	// bucket 1 size: 2 -> 2
 	p, _ = rt.GenRandPeerID(1)
-	require.True(t, rt.UsefulPeer(p))
+	require.True(t, rt.UsefulNewPeer(p))
 	rt.TryAddPeer(p, true, false)
 
 	// adding non replaceable peer to bucket 1
 	// bucket 1 size: 2 -> 2
 	p, _ = rt.GenRandPeerID(1)
-	require.False(t, rt.UsefulPeer(p))
+	require.False(t, rt.UsefulNewPeer(p))
 	rt.TryAddPeer(p, true, false)
 }
 
