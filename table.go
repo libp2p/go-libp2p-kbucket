@@ -120,14 +120,14 @@ func (rt *RoutingTable) UsefulNewPeer(p peer.ID) bool {
 	rt.tabLock.RLock()
 	defer rt.tabLock.RUnlock()
 
-	if rt.Find(p) != "" {
-		// peer already exists in the routing table, so it isn't useful
-		return false
-	}
-
 	// bucket corresponding to p
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
+
+	if bucket.getPeer(p) != nil {
+		// peer already exists in the routing table, so it isn't useful
+		return false
+	}
 
 	// bucket isn't full
 	if bucket.len() < rt.bucketsize {
