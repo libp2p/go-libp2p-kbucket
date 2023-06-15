@@ -120,7 +120,7 @@ func (rt *RoutingTable) UsefulNewPeer(p peer.ID) bool {
 	rt.tabLock.RLock()
 	defer rt.tabLock.RUnlock()
 
-	if rt.Find(p) != "" {
+	if rt.find(p) != "" {
 		// peer already exists in the routing table, so it isn't useful
 		return false
 	}
@@ -412,12 +412,21 @@ func (rt *RoutingTable) nextBucket() {
 }
 
 // Find a specific peer by ID or return nil
-func (rt *RoutingTable) Find(id peer.ID) peer.ID {
-	srch := rt.NearestPeers(ConvertPeerID(id), 1)
-	if len(srch) == 0 || srch[0] != id {
+func (rt *RoutingTable) Find(p peer.ID) peer.ID {
+	rt.tabLock.RLock()
+	defer rt.tabLock.RUnlock()
+
+	return rt.find(p)
+}
+
+// caller is responsible for calling
+func (rt *RoutingTable) find(p peer.ID) peer.ID {
+	pi := rt.buckets[rt.bucketIdForPeer(p)].getPeer(p)
+	if pi == nil {
 		return ""
 	}
-	return srch[0]
+
+	return p
 }
 
 // NearestPeer returns a single peer that is nearest to the given ID
