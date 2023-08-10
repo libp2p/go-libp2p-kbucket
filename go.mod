@@ -6,7 +6,7 @@ require (
 	github.com/ipfs/boxo v0.8.1
 	github.com/ipfs/go-log v1.0.5
 	github.com/libp2p/go-cidranger v1.1.0
-	github.com/libp2p/go-libp2p v0.27.6
+	github.com/libp2p/go-libp2p v0.27.8
 	github.com/libp2p/go-libp2p-asn-util v0.3.0
 	github.com/minio/sha256-simd v1.0.1
 	github.com/multiformats/go-multiaddr v0.9.0

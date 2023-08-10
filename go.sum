@@ -42,8 +42,8 @@ github.com/libp2p/go-buffer-pool v0.1.0 h1:oK4mSFcQz7cTQIfqbe4MIj9gLW+mnanjyFtc6
 github.com/libp2p/go-buffer-pool v0.1.0/go.mod h1:N+vh8gMqimBzdKkSMVuydVDq+UV5QTWy5HSiZacSbPg=
 github.com/libp2p/go-cidranger v1.1.0 h1:ewPN8EZ0dd1LSnrtuwd4709PXVcITVeuwbag38yPW7c=
 github.com/libp2p/go-cidranger v1.1.0/go.mod h1:KWZTfSr+r9qEo9OkI9/SIEeAtw+NNoU0dXIXt15Okic=
-github.com/libp2p/go-libp2p v0.27.6 h1:KmGU5kskCaaerm53heqzfGOlrW2z8icZ+fnyqgrZs38=
-github.com/libp2p/go-libp2p v0.27.6/go.mod h1:oMfQGTb9CHnrOuSM6yMmyK2lXz3qIhnkn2+oK3B1Y2g=
+github.com/libp2p/go-libp2p v0.27.8 h1:IX5x/4yKwyPQeVS2AXHZ3J4YATM9oHBGH1gBc23jBAI=
+github.com/libp2p/go-libp2p v0.27.8/go.mod h1:eCFFtd0s5i/EVKR7+5Ki8bM7qwkNW3TPTTSSW9sz8NE=
 github.com/libp2p/go-libp2p-asn-util v0.3.0 h1:gMDcMyYiZKkocGXDQ5nsUQyquC9+H+iLEQHwOCZ7s8s=
 github.com/libp2p/go-libp2p-asn-util v0.3.0/go.mod h1:B1mcOrKUE35Xq/ASTmQ4tN3LNzVVaMNmq2NACuqyB9w=
 github.com/mattn/go-isatty v0.0.14/go.mod h1:7GGIvUiUoEMVVmxf/4nioHXj79iQHKdU27kJ6hsGG94=
