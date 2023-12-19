@@ -7,7 +7,7 @@ require (
 	github.com/ipfs/go-log v1.0.5
 	github.com/libp2p/go-cidranger v1.1.0
 	github.com/libp2p/go-libp2p v0.30.0
-	github.com/libp2p/go-libp2p-asn-util v0.3.0
+	github.com/libp2p/go-libp2p-asn-util v0.4.1
 	github.com/minio/sha256-simd v1.0.1
 	github.com/multiformats/go-multiaddr v0.11.0
 	github.com/multiformats/go-multihash v0.2.3
@@ -39,7 +39,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.25.0 // indirect
 	golang.org/x/crypto v0.17.0 // indirect
-	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63 // indirect
+	golang.org/x/exp v0.0.0-20231214170342-aacd6d4b4611 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
