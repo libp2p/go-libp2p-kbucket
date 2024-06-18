@@ -13,7 +13,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-kbucket/peerdiversity"
 
-	logging "github.com/ipfs/go-log"
+	logging "github.com/ipfs/go-log/v2"
 )
 
 var log = logging.Logger("table")
