@@ -1,6 +1,6 @@
 module github.com/libp2p/go-libp2p-kbucket
 
-go 1.21
+go 1.22
 
 require (
 	github.com/ipfs/boxo v0.8.1
