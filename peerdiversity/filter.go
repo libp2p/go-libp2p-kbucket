@@ -169,6 +169,7 @@ func (f *Filter) TryAdd(p peer.ID) bool {
 		group := PeerGroupInfo{Id: p, Cpl: cpl, IPGroupKey: key}
 
 		if !f.pgm.Allow(group) {
+			dfLog.Debugw("rejected for low diversity", "peer", p, "address", a.String())
 			return false
 		}
 
