@@ -132,63 +132,98 @@ func TestUsefulNewPeer(t *testing.T) {
 	rt, err := NewRoutingTable(2, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
+	generatedPeerIds := map[peer.ID]struct{}{}
+	genNewPeerIdWithCpl := func(targetCpl uint) (peer.ID, error) {
+		var p peer.ID
+		var err error
+		for {
+			p, err = rt.GenRandPeerID(targetCpl)
+			if err != nil {
+				break
+			}
+			if _, exists := generatedPeerIds[p]; !exists {
+				generatedPeerIds[p] = struct{}{}
+				break
+			}
+		}
+		return p, err
+	}
+
 	// add first peer to bucket 0
-	p, _ := rt.GenRandPeerID(0)
+	p, _ := genNewPeerIdWithCpl(0)
 	require.True(t, rt.UsefulNewPeer(p))
-	rt.TryAddPeer(p, true, false)
+	added, err := rt.TryAddPeer(p, true, false)
+	require.NoError(t, err)
+	require.True(t, added)
 	// first peer shouldn't be useful, as it is already in the rt
 	require.False(t, rt.UsefulNewPeer(p))
 
 	// add second peer to bucket 0
-	p, _ = rt.GenRandPeerID(0)
+	p, _ = genNewPeerIdWithCpl(0)
 	require.True(t, rt.UsefulNewPeer(p))
-	rt.TryAddPeer(p, true, false)
+	added, err = rt.TryAddPeer(p, true, false)
+	require.NoError(t, err)
+	require.True(t, added)
 
 	// bucket 0 (also last bucket) full with non replaceable peers
-	p, _ = rt.GenRandPeerID(0)
+	p, _ = genNewPeerIdWithCpl(0)
 	require.False(t, rt.UsefulNewPeer(p))
 
 	// bucket 0 is full, unfolding it
 	// add first peer to bucket 1
-	p, _ = rt.GenRandPeerID(1)
+	p, _ = genNewPeerIdWithCpl(1)
 	require.True(t, rt.UsefulNewPeer(p))
-	rt.TryAddPeer(p, true, false)
+	added, err = rt.TryAddPeer(p, true, false)
+	require.NoError(t, err)
+	require.True(t, added)
 
 	// add second peer to bucket 1
 	// cpl is 2, but bucket 1 is last bucket
-	p, _ = rt.GenRandPeerID(2)
+	p, _ = genNewPeerIdWithCpl(2)
 	require.True(t, rt.UsefulNewPeer(p))
-	rt.TryAddPeer(p, true, false)
+	added, err = rt.TryAddPeer(p, true, false)
+	require.NoError(t, err)
+	require.True(t, added)
 
 	// unfolding bucket 1
 	// adding second peer to bucket 2
-	p, _ = rt.GenRandPeerID(2)
+	p, _ = genNewPeerIdWithCpl(2)
 	require.True(t, rt.UsefulNewPeer(p))
-	rt.TryAddPeer(p, true, false)
+	added, err = rt.TryAddPeer(p, true, false)
+	require.NoError(t, err)
+	require.True(t, added)
 
 	// adding replaceable peer to bucket 1
 	// bucket 1 size: 1 -> 2
-	p, _ = rt.GenRandPeerID(1)
+	p, _ = genNewPeerIdWithCpl(1)
 	require.True(t, rt.UsefulNewPeer(p))
-	rt.TryAddPeer(p, true, true)
+	added, err = rt.TryAddPeer(p, true, true)
+	require.NoError(t, err)
+	require.True(t, added)
 
 	// adding replaceable peer to bucket 1
 	// bucket 1 size: 2 -> 2
-	p, _ = rt.GenRandPeerID(1)
+	p, _ = genNewPeerIdWithCpl(1)
 	require.True(t, rt.UsefulNewPeer(p))
-	rt.TryAddPeer(p, true, true)
+	added, err = rt.TryAddPeer(p, true, true)
+	require.NoError(t, err)
+	require.True(t, added)
 
 	// adding non replaceable peer to bucket 1
 	// bucket 1 size: 2 -> 2
-	p, _ = rt.GenRandPeerID(1)
+	p, _ = genNewPeerIdWithCpl(1)
 	require.True(t, rt.UsefulNewPeer(p))
-	rt.TryAddPeer(p, true, false)
+	added, err = rt.TryAddPeer(p, true, false)
+	require.NoError(t, err)
+	require.True(t, added)
 
 	// adding non replaceable peer to bucket 1
 	// bucket 1 size: 2 -> 2
-	p, _ = rt.GenRandPeerID(1)
+	p, _ = genNewPeerIdWithCpl(1)
 	require.False(t, rt.UsefulNewPeer(p))
-	rt.TryAddPeer(p, true, false)
+	added, err = rt.TryAddPeer(p, true, false)
+	require.Error(t, err)
+	require.False(t, added)
 }
 
 func TestEmptyBucketCollapse(t *testing.T) {
