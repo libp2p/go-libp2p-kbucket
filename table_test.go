@@ -87,7 +87,6 @@ func TestBucket(t *testing.T) {
 			t.Fatalf("split failed. found id with cpl == 0 in non 0 bucket")
 		}
 	}
-
 }
 
 func TestNPeersForCpl(t *testing.T) {
@@ -510,7 +509,6 @@ func TestTryAddPeer(t *testing.T) {
 	require.NotNil(t, p6)
 	require.True(t, pi.LastUsefulAt.IsZero())
 	rt.tabLock.Unlock()
-
 }
 
 func TestReplacePeerWithBucketSize1(t *testing.T) {
@@ -556,7 +554,6 @@ func TestMarkAllPeersIrreplaceable(t *testing.T) {
 	for i := range ps {
 		require.False(t, ps[i].replaceable)
 	}
-
 }
 
 func TestTableFindMultiple(t *testing.T) {
@@ -589,8 +586,9 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 	rt, err := NewRoutingTable(5, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 
-	peers := make([]peer.ID, 100)
-	for i := 0; i < 100; i++ {
+	generatedPeerCount := 100
+	peers := make([]peer.ID, generatedPeerCount)
+	for i := 0; i < generatedPeerCount; i++ {
 		peers[i] = test.RandPeerIDFatal(t)
 		rt.TryAddPeer(peers[i], true, false)
 	}
@@ -601,9 +599,11 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 
 	// should be able to find at least 30
 	// ~31 (logtwo(100) * 5)
-	found := rt.NearestPeers(ConvertPeerID(peers[2]), 20)
-	if len(found) != 20 {
-		t.Fatalf("asked for 20 peers, got %d", len(found))
+	targetNumberOfPeers := 20
+	found := rt.NearestPeers(ConvertPeerID(peers[2]), targetNumberOfPeers)
+	if len(found) != min(targetNumberOfPeers, rt.Size()) {
+		rt.Print()
+		t.Fatalf("asked for %d peers, got %d, rt size %d", targetNumberOfPeers, len(found), rt.Size())
 	}
 	for i, p := range found {
 		if p != closest[i] {
@@ -612,7 +612,7 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 	}
 
 	// Ok, now let's try finding all of them.
-	found = rt.NearestPeers(ConvertPeerID(peers[2]), 100)
+	found = rt.NearestPeers(ConvertPeerID(peers[2]), generatedPeerCount)
 	if len(found) != rt.Size() {
 		t.Fatalf("asked for %d peers, got %d", rt.Size(), len(found))
 	}
