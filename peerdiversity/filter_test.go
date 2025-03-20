@@ -94,11 +94,15 @@ func TestDiversityFilter(t *testing.T) {
 			mFnc: func(m *mockPeerGroupFilter) {
 				m.peerAddressFunc = func(id peer.ID) []ma.Multiaddr {
 					if id == "p1" {
-						return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0"),
-							ma.StringCast("/ip4/127.0.0.1/tcp/0")}
+						return []ma.Multiaddr{
+							ma.StringCast("/ip4/127.0.0.1/tcp/0"),
+							ma.StringCast("/ip4/127.0.0.1/tcp/0"),
+						}
 					}
-					return []ma.Multiaddr{ma.StringCast("/ip4/127.0.0.1/tcp/0"),
-						ma.StringCast("/ip4/192.168.1.1/tcp/0")}
+					return []ma.Multiaddr{
+						ma.StringCast("/ip4/127.0.0.1/tcp/0"),
+						ma.StringCast("/ip4/192.168.1.1/tcp/0"),
+					}
 				}
 				m.allowFnc = func(g PeerGroupInfo) bool { return g.IPGroupKey == "127.0.0.0" }
 			},
@@ -232,18 +236,18 @@ func TestIPGroupKey(t *testing.T) {
 	// case 1 legacy /8
 	ip := net.ParseIP("17.111.0.1")
 	require.NotNil(t, ip.To4())
-	g := f.ipGroupKey(ip)
+	g := f.IPGroupKey(ip)
 	require.Equal(t, "17.0.0.0", string(g))
 
 	// case2 ip4 /16
 	ip = net.ParseIP("192.168.1.1")
 	require.NotNil(t, ip.To4())
-	g = f.ipGroupKey(ip)
+	g = f.IPGroupKey(ip)
 	require.Equal(t, "192.168.0.0", string(g))
 
 	// case3 ipv6
 	ip = net.ParseIP("2a03:2880:f003:c07:face:b00c::2")
-	g = f.ipGroupKey(ip)
+	g = f.IPGroupKey(ip)
 	require.Equal(t, strconv.FormatUint(uint64(asnutil.AsnForIPv6(ip)), 10), string(g))
 }
 

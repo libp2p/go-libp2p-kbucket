@@ -161,7 +161,7 @@ func (f *Filter) TryAdd(p peer.ID) bool {
 		}
 
 		// reject the peer if we can't determine a grouping for one of it's address.
-		key := f.ipGroupKey(ip)
+		key := f.IPGroupKey(ip)
 		if len(key) == 0 {
 			dfLog.Errorw("group key is empty", "appKey", f.logKey, "ip", ip.String(), "peer", p)
 			return false
@@ -200,7 +200,7 @@ func (f *Filter) WhitelistPeers(peers ...peer.ID) {
 }
 
 // returns the PeerIPGroupKey to which the given IP belongs.
-func (f *Filter) ipGroupKey(ip net.IP) PeerIPGroupKey {
+func (f *Filter) IPGroupKey(ip net.IP) PeerIPGroupKey {
 	switch bz := ip.To4(); bz {
 	case nil:
 		// ipv6 Address -> get ASN
