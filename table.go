@@ -58,7 +58,7 @@ type RoutingTable struct {
 	// it to make place for a new peer if the bucket is full
 	usefulnessGracePeriod time.Duration
 
-	DiversityFilter *peerdiversity.Filter
+	df *peerdiversity.Filter
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
@@ -84,7 +84,7 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 
 		usefulnessGracePeriod: usefulnessGracePeriod,
 
-		DiversityFilter: df,
+		df: df,
 	}
 
 	rt.ctx, rt.ctxCancel = context.WithCancel(context.Background())
@@ -225,8 +225,8 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 	// add it to the diversity filter for now.
 	// if we aren't able to find a place for the peer in the table,
 	// we will simply remove it from the Filter later.
-	if rt.DiversityFilter != nil {
-		if !rt.DiversityFilter.TryAdd(p) {
+	if rt.df != nil {
+		if !rt.df.TryAdd(p) {
 			return false, errors.New("peer rejected by the diversity filter")
 		}
 	}
@@ -297,8 +297,8 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 	}
 
 	// we weren't able to find place for the peer, remove it from the filter state.
-	if rt.DiversityFilter != nil {
-		rt.DiversityFilter.Remove(p)
+	if rt.df != nil {
+		rt.df.Remove(p)
 	}
 	return false, ErrPeerRejectedNoCapacity
 }
@@ -376,8 +376,8 @@ func (rt *RoutingTable) removePeer(p peer.ID) bool {
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
 	if bucket.remove(p) {
-		if rt.DiversityFilter != nil {
-			rt.DiversityFilter.Remove(p)
+		if rt.df != nil {
+			rt.df.Remove(p)
 		}
 		for {
 			lastBucketIndex := len(rt.buckets) - 1
@@ -545,8 +545,8 @@ func (rt *RoutingTable) Print() {
 // GetDiversityStats returns the diversity stats for the Routing Table if a diversity Filter
 // is configured.
 func (rt *RoutingTable) GetDiversityStats() []peerdiversity.CplDiversityStats {
-	if rt.DiversityFilter != nil {
-		return rt.DiversityFilter.GetDiversityStats()
+	if rt.df != nil {
+		return rt.df.GetDiversityStats()
 	}
 	return nil
 }
