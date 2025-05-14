@@ -3,7 +3,6 @@ module github.com/libp2p/go-libp2p-kbucket
 go 1.23.0
 
 require (
-	github.com/ipfs/boxo v0.29.1
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/libp2p/go-cidranger v1.1.0
 	github.com/libp2p/go-libp2p v0.41.1

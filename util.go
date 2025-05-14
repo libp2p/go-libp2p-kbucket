@@ -10,8 +10,6 @@ import (
 
 	ks "github.com/libp2p/go-libp2p-kbucket/keyspace"
 	"github.com/libp2p/go-libp2p/core/peer"
-
-	u "github.com/ipfs/boxo/util"
 )
 
 // ErrLookupFailure is returned if a routing table query returns no results. This is NOT expected
@@ -34,12 +32,16 @@ func (id ID) less(other ID) bool {
 	return a.Less(b)
 }
 
-func xor(a, b ID) ID {
-	return ID(u.XOR(a, b))
+func Xor(a, b ID) ID {
+	out := make([]byte, len(a))
+	for i := range out {
+		out[i] = a[i] ^ b[i]
+	}
+	return out
 }
 
 func CommonPrefixLen(a, b ID) int {
-	return ks.ZeroPrefixLen(u.XOR(a, b))
+	return ks.ZeroPrefixLen(Xor(a, b))
 }
 
 // ConvertPeerID creates a DHT ID by hashing a Peer ID (Multihash)
@@ -59,8 +61,8 @@ func Closer(a, b peer.ID, key string) bool {
 	aid := ConvertPeerID(a)
 	bid := ConvertPeerID(b)
 	tgt := ConvertKey(key)
-	adist := xor(aid, tgt)
-	bdist := xor(bid, tgt)
+	adist := Xor(aid, tgt)
+	bdist := Xor(bid, tgt)
 
 	return adist.less(bdist)
 }

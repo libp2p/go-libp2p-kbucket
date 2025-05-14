@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"math/big"
 	"testing"
-
-	u "github.com/ipfs/boxo/util"
 )
 
 func TestPrefixLen(t *testing.T) {
@@ -22,11 +20,9 @@ func TestPrefixLen(t *testing.T) {
 			t.Errorf("ZeroPrefixLen failed: %v != %v", r, lens[i])
 		}
 	}
-
 }
 
 func TestXorKeySpace(t *testing.T) {
-
 	ids := [][]byte{
 		{0xFF, 0xFF, 0xFF, 0xFF},
 		{0x00, 0x00, 0x00, 0x00},
@@ -73,7 +69,6 @@ func TestXorKeySpace(t *testing.T) {
 }
 
 func TestDistancesAndCenterSorting(t *testing.T) {
-
 	adjs := [][]byte{
 		{173, 149, 19, 27, 192, 183, 153, 192, 177, 175, 71, 127, 177, 79, 207, 38, 166, 169, 247, 96, 121, 228, 139, 240, 144, 172, 183, 232, 54, 123, 253, 14},
 		{223, 63, 97, 152, 4, 169, 47, 219, 64, 87, 25, 45, 196, 61, 215, 72, 234, 119, 138, 220, 82, 188, 73, 140, 232, 5, 36, 192, 20, 184, 17, 25},
@@ -101,7 +96,7 @@ func TestDistancesAndCenterSorting(t *testing.T) {
 	}
 
 	d1 := keys[2].Distance(keys[5])
-	d2 := u.XOR(keys[2].Bytes, keys[5].Bytes)
+	d2 := xor(keys[2].Bytes, keys[5].Bytes)
 	d2 = d2[len(keys[2].Bytes)-len(d1.Bytes()):] // skip empty space for big
 	if !bytes.Equal(d1.Bytes(), d2) {
 		t.Errorf("bytes should be the same. %v == %v", d1.Bytes(), d2)
@@ -118,5 +113,4 @@ func TestDistancesAndCenterSorting(t *testing.T) {
 			t.Errorf("order is wrong. %d?? %v == %v", o, keys[o], keys2[i])
 		}
 	}
-
 }
