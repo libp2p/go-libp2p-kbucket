@@ -15,7 +15,7 @@ func TestCloser(t *testing.T) {
 	// returns true if d(Pa, X) < d(Pb, X)
 	for {
 		X = string(test.RandPeerIDFatal(t))
-		if xor(ConvertPeerID(Pa), ConvertKey(X)).less(xor(ConvertPeerID(Pb), ConvertKey(X))) {
+		if Xor(ConvertPeerID(Pa), ConvertKey(X)).less(Xor(ConvertPeerID(Pb), ConvertKey(X))) {
 			break
 		}
 	}
@@ -25,7 +25,7 @@ func TestCloser(t *testing.T) {
 	// returns false if d(Pa,X) > d(Pb, X)
 	for {
 		X = string(test.RandPeerIDFatal(t))
-		if xor(ConvertPeerID(Pb), ConvertKey(X)).less(xor(ConvertPeerID(Pa), ConvertKey(X))) {
+		if Xor(ConvertPeerID(Pb), ConvertKey(X)).less(Xor(ConvertPeerID(Pa), ConvertKey(X))) {
 			break
 		}
 
