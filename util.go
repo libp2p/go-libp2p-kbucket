@@ -33,11 +33,7 @@ func (id ID) less(other ID) bool {
 }
 
 func Xor(a, b ID) ID {
-	out := make([]byte, len(a))
-	for i := range out {
-		out[i] = a[i] ^ b[i]
-	}
-	return out
+	return ID(ks.Xor(a, b))
 }
 
 func CommonPrefixLen(a, b ID) int {

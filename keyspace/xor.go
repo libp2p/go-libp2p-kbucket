@@ -37,7 +37,7 @@ func (s *xorKeySpace) Equal(k1, k2 Key) bool {
 // Distance returns the distance metric in this key space
 func (s *xorKeySpace) Distance(k1, k2 Key) *big.Int {
 	// XOR the keys
-	k3 := xor(k1.Bytes, k2.Bytes)
+	k3 := Xor(k1.Bytes, k2.Bytes)
 
 	// interpret it as an integer
 	dist := big.NewInt(0).SetBytes(k3)
@@ -59,7 +59,7 @@ func ZeroPrefixLen(id []byte) int {
 	return len(id) * 8
 }
 
-func xor(a, b []byte) []byte {
+func Xor(a, b []byte) []byte {
 	out := make([]byte, len(a))
 	for i := range out {
 		out[i] = a[i] ^ b[i]
