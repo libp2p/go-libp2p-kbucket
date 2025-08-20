@@ -1,6 +1,6 @@
 module github.com/libp2p/go-libp2p-kbucket
 
-go 1.23.8
+go 1.24
 
 require (
 	github.com/ipfs/go-log/v2 v2.8.0
