@@ -47,7 +47,7 @@ func main() {
 		panic(err)
 	}
 
-	printf := func(s string, args ...interface{}) {
+	printf := func(s string, args ...any) {
 		_, err = fmt.Fprintf(f, s, args...)
 		if err != nil {
 			panic(err)
