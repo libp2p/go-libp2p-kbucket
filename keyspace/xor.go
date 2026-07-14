@@ -27,6 +27,13 @@ func (s *xorKeySpace) Key(id []byte) Key {
 		Original: id,
 		Bytes:    key,
 	}
+
+}
+
+// Cmp eturns an integer comparing two keys in this key space.The result will
+// be 0 if k1 == k2, -1 if k1 < k2, and +1 if k1 > k2.
+func (s *xorKeySpace) Cmp(k1, k2 Key) int {
+	return bytes.Compare(k1.Bytes, k2.Bytes)
 }
 
 // Equal returns whether keys are equal in this key space

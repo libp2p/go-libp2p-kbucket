@@ -2,7 +2,7 @@ package kbucket
 
 import (
 	"container/list"
-	"sort"
+	"slices"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -20,13 +20,6 @@ type peerDistanceSorter struct {
 }
 
 func (pds *peerDistanceSorter) Len() int { return len(pds.peers) }
-func (pds *peerDistanceSorter) Swap(a, b int) {
-	pds.peers[a], pds.peers[b] = pds.peers[b], pds.peers[a]
-}
-
-func (pds *peerDistanceSorter) Less(a, b int) bool {
-	return pds.peers[a].distance.less(pds.peers[b].distance)
-}
 
 // Append the peer.ID to the sorter's slice. It may no longer be sorted.
 func (pds *peerDistanceSorter) appendPeer(p peer.ID, pDhtId ID) {
@@ -44,22 +37,19 @@ func (pds *peerDistanceSorter) appendPeersFromList(l *list.List) {
 }
 
 func (pds *peerDistanceSorter) sort() {
-	sort.Sort(pds)
+	slices.SortFunc(pds.peers, func(a, b peerDistance) int {
+		return a.distance.cmp(b.distance)
+	})
 }
 
-// SortClosestPeers Sort the given peers by their ascending distance from the target. A new slice is returned.
+// SortClosestPeers sorts the given peers by their ascending distance from the
+// target. A new slice is returned.
 func SortClosestPeers(peers []peer.ID, target ID) []peer.ID {
-	sorter := peerDistanceSorter{
-		peers:  make([]peerDistance, 0, len(peers)),
-		target: target,
-	}
-	for _, p := range peers {
-		sorter.appendPeer(p, ConvertPeerID(p))
-	}
-	sorter.sort()
-	out := make([]peer.ID, 0, sorter.Len())
-	for _, p := range sorter.peers {
-		out = append(out, p.p)
-	}
+	out := slices.Clone(peers)
+	slices.SortFunc(out, func(a, b peer.ID) int {
+		aDist := Xor(target, ConvertPeerID(a))
+		bDist := Xor(target, ConvertPeerID(b))
+		return aDist.cmp(bDist)
+	})
 	return out
 }
