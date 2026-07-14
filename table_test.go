@@ -1,7 +1,7 @@
 package kbucket
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -35,7 +35,7 @@ func TestBucket(t *testing.T) {
 	b := newBucket()
 
 	peers := make([]peer.ID, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		peers[i] = test.RandPeerIDFatal(t)
 		b.pushFront(&PeerInfo{
 			Id:                            peers[i],
@@ -52,7 +52,7 @@ func TestBucket(t *testing.T) {
 	infos := b.peers()
 	require.Len(t, infos, 100)
 
-	i := rand.Intn(len(peers))
+	i := rand.IntN(len(peers))
 	p := b.getPeer(peers[i])
 	require.NotNil(t, p)
 	require.Equal(t, peers[i], p.Id)
@@ -361,7 +361,7 @@ func TestTableCallbacks(t *testing.T) {
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		peers[i] = test.RandPeerIDFatal(t)
 	}
 
@@ -410,15 +410,15 @@ func TestTryAddPeerLoad(t *testing.T) {
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		peers[i] = test.RandPeerIDFatal(t)
 	}
 
-	for i := 0; i < 10000; i++ {
-		rt.TryAddPeer(peers[rand.Intn(len(peers))], true, false)
+	for range 10000 {
+		rt.TryAddPeer(peers[rand.IntN(len(peers))], true, false)
 	}
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		id := ConvertPeerID(test.RandPeerIDFatal(t))
 		ret := rt.NearestPeers(id, 5)
 		if len(ret) == 0 {
@@ -436,7 +436,7 @@ func TestTableFind(t *testing.T) {
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		peers[i] = test.RandPeerIDFatal(t)
 		rt.TryAddPeer(peers[i], true, false)
 	}
@@ -600,7 +600,7 @@ func TestTableFindMultiple(t *testing.T) {
 	require.NoError(t, err)
 
 	peers := make([]peer.ID, 100)
-	for i := 0; i < 18; i++ {
+	for i := range 18 {
 		peers[i] = test.RandPeerIDFatal(t)
 		rt.TryAddPeer(peers[i], true, false)
 	}
@@ -623,7 +623,7 @@ func TestTableFindMultipleBuckets(t *testing.T) {
 
 	generatedPeerCount := 100
 	peers := make([]peer.ID, generatedPeerCount)
-	for i := 0; i < generatedPeerCount; i++ {
+	for i := range generatedPeerCount {
 		peers[i] = test.RandPeerIDFatal(t)
 		rt.TryAddPeer(peers[i], true, false)
 	}
@@ -670,30 +670,30 @@ func TestTableMultithreaded(t *testing.T) {
 	tab, err := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m, NoOpThreshold, nil)
 	require.NoError(t, err)
 	var peers []peer.ID
-	for i := 0; i < 500; i++ {
+	for range 500 {
 		peers = append(peers, test.RandPeerIDFatal(t))
 	}
 
 	done := make(chan struct{})
 	go func() {
-		for i := 0; i < 1000; i++ {
-			n := rand.Intn(len(peers))
+		for range 1000 {
+			n := rand.IntN(len(peers))
 			tab.TryAddPeer(peers[n], true, false)
 		}
 		done <- struct{}{}
 	}()
 
 	go func() {
-		for i := 0; i < 1000; i++ {
-			n := rand.Intn(len(peers))
+		for range 1000 {
+			n := rand.IntN(len(peers))
 			tab.TryAddPeer(peers[n], true, false)
 		}
 		done <- struct{}{}
 	}()
 
 	go func() {
-		for i := 0; i < 1000; i++ {
-			n := rand.Intn(len(peers))
+		for range 1000 {
+			n := rand.IntN(len(peers))
 			tab.Find(peers[n])
 		}
 		done <- struct{}{}

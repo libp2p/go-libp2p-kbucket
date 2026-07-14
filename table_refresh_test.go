@@ -39,7 +39,7 @@ func TestGenRandomKey(t *testing.T) {
 	t.Parallel()
 
 	// run multiple occurences to make sure the test wasn't just lucky
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		// generate routing table with random local peer ID
 		local := test.RandPeerIDFatal(t)
 		m := pstore.NewMetrics()

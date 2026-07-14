@@ -3,6 +3,7 @@ package peerdiversity
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"sort"
 	"strconv"
@@ -251,9 +252,7 @@ func (f *Filter) GetDiversityStats() []CplDiversityStats {
 		ps := make(map[peer.ID][]PeerIPGroupKey, len(f.cplPeerGroups[cpl]))
 		cd := CplDiversityStats{cpl, ps}
 
-		for p, groups := range f.cplPeerGroups[cpl] {
-			ps[p] = groups
-		}
+		maps.Copy(ps, f.cplPeerGroups[cpl])
 		stats = append(stats, cd)
 	}
 
