@@ -54,16 +54,18 @@ func TestXorKeySpace(t *testing.T) {
 	}
 
 	for i := 1; i < len(ks); i++ {
-		if ks[i][0].Less(ks[i-1][0]) == ks[i-1][0].Less(ks[i][0]) {
+		keyA := ks[i][0]
+		keyB := ks[i-1][0]
+		if keyB.Cmp(keyA) == keyA.Cmp(keyB) {
 			t.Errorf("less should be different.")
 		}
 
-		if ks[i][0].Distance(ks[i-1][0]).Cmp(ks[i-1][0].Distance(ks[i][0])) != 0 {
+		if keyB.Distance(keyA).Cmp(keyA.Distance(keyB)) != 0 {
 			t.Errorf("distance should be the same.")
 		}
 
-		if ks[i][0].Equal(ks[i-1][0]) {
-			t.Errorf("Keys should not be eq. %v != %v", ks[i][0], ks[i-1][0])
+		if keyB.Equal(keyA) {
+			t.Errorf("Keys should not be eq. %v != %v", keyB, keyA)
 		}
 	}
 }

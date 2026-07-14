@@ -33,14 +33,6 @@ func (k1 Key) Equal(k2 Key) bool {
 	return k1.Space.Equal(k1, k2)
 }
 
-// Less returns whether this key comes before another.
-func (k1 Key) Less(k2 Key) bool {
-	if k1.Space != k2.Space {
-		panic("k1 and k2 not in same key space.")
-	}
-	return k1.Space.Less(k1, k2)
-}
-
 // Distance returns this key's distance to another
 func (k1 Key) Distance(k2 Key) *big.Int {
 	if k1.Space != k2.Space {
@@ -60,8 +52,6 @@ type KeySpace interface {
 	Distance(Key, Key) *big.Int
 	// Cmp returns an integer comparing two keys.
 	Cmp(Key, Key) int
-	// Less returns whether the first key is smaller than the second.
-	Less(Key, Key) bool
 }
 
 // SortByDistance takes a KeySpace, a center Key, and a list of Keys toSort.

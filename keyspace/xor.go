@@ -51,11 +51,6 @@ func (s *xorKeySpace) Distance(k1, k2 Key) *big.Int {
 	return dist
 }
 
-// Less returns whether the first key is smaller than the second.
-func (s *xorKeySpace) Less(k1, k2 Key) bool {
-	return bytes.Compare(k1.Bytes, k2.Bytes) < 0
-}
-
 // ZeroPrefixLen returns the number of consecutive zeroes in a byte slice.
 func ZeroPrefixLen(id []byte) int {
 	for i, b := range id {
