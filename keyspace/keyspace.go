@@ -17,7 +17,7 @@ type Key struct {
 	Bytes []byte
 }
 
-// Cmp returns in integer that compares the two Keys.
+// Cmp returns an integer that compares the two Keys.
 func (k1 Key) Cmp(k2 Key) int {
 	if k1.Space != k2.Space {
 		panic("k1 and k2 not in same key space.")
