@@ -850,39 +850,43 @@ func TestPeerRemovedNotificationWhenPeerIsEvicted(t *testing.T) {
 	require.NotContains(t, pset, p1)
 }
 
+// benchPeerPoolSize bounds the pre-generated peer pool: b.Loop decides the
+// iteration count at runtime, so benchmarks size the pool up front and index
+// into it modulo its length.
+const benchPeerPoolSize = 4096
+
+// Once the pool wraps, TryAddPeer sees peers already in the table. That path
+// dominates regardless, since random peers stop displacing incumbents as soon
+// as the buckets saturate.
 func BenchmarkAddPeer(b *testing.B) {
-	b.StopTimer()
 	local := ConvertKey("localKey")
 	m := pstore.NewMetrics()
 	tab, err := NewRoutingTable(20, local, time.Hour, m, NoOpThreshold, nil)
 	require.NoError(b, err)
 
-	var peers []peer.ID
-	for i := 0; i < b.N; i++ {
-		peers = append(peers, test.RandPeerIDFatal(b))
+	peers := make([]peer.ID, benchPeerPoolSize)
+	for i := range peers {
+		peers[i] = test.RandPeerIDFatal(b)
 	}
 
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		tab.TryAddPeer(peers[i], true, false)
+	for i := 0; b.Loop(); i++ {
+		tab.TryAddPeer(peers[i%len(peers)], true, false)
 	}
 }
 
 func BenchmarkFinds(b *testing.B) {
-	b.StopTimer()
 	local := ConvertKey("localKey")
 	m := pstore.NewMetrics()
 	tab, err := NewRoutingTable(20, local, time.Hour, m, NoOpThreshold, nil)
 	require.NoError(b, err)
 
-	var peers []peer.ID
-	for i := 0; i < b.N; i++ {
-		peers = append(peers, test.RandPeerIDFatal(b))
+	peers := make([]peer.ID, benchPeerPoolSize)
+	for i := range peers {
+		peers[i] = test.RandPeerIDFatal(b)
 		tab.TryAddPeer(peers[i], true, false)
 	}
 
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		tab.Find(peers[i])
+	for i := 0; b.Loop(); i++ {
+		tab.Find(peers[i%len(peers)])
 	}
 }
