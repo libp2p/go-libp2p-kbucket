@@ -13,7 +13,7 @@ type peerDistance struct {
 	distance ID
 }
 
-// peerDistanceSorter implements sort.Interface to sort peers by xor distance
+// peerDistanceSorter sorts peers by xor distance to a target.
 type peerDistanceSorter struct {
 	peers  []peerDistance
 	target ID
@@ -45,11 +45,18 @@ func (pds *peerDistanceSorter) sort() {
 // SortClosestPeers sorts the given peers by their ascending distance from the
 // target. A new slice is returned.
 func SortClosestPeers(peers []peer.ID, target ID) []peer.ID {
-	out := slices.Clone(peers)
-	slices.SortFunc(out, func(a, b peer.ID) int {
-		aDist := Xor(target, ConvertPeerID(a))
-		bDist := Xor(target, ConvertPeerID(b))
-		return aDist.cmp(bDist)
-	})
+	sorter := peerDistanceSorter{
+		peers:  make([]peerDistance, 0, len(peers)),
+		target: target,
+	}
+	for _, p := range peers {
+		sorter.appendPeer(p, ConvertPeerID(p))
+	}
+	sorter.sort()
+
+	out := make([]peer.ID, 0, sorter.Len())
+	for _, p := range sorter.peers {
+		out = append(out, p.p)
+	}
 	return out
 }

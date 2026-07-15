@@ -54,13 +54,26 @@ type KeySpace interface {
 	Cmp(Key, Key) int
 }
 
+// keyDistance holds a Key alongside its precomputed distance to a center Key.
+type keyDistance struct {
+	key      Key
+	distance *big.Int
+}
+
 // SortByDistance takes a KeySpace, a center Key, and a list of Keys toSort.
 // It returns a new list, where the Keys toSort have been sorted by their
 // distance to the center Key.
 func SortByDistance(sp KeySpace, center Key, toSort []Key) []Key {
-	toSortCopy := slices.Clone(toSort)
-	slices.SortFunc(toSortCopy, func(a, b Key) int {
-		return center.Distance(a).Cmp(center.Distance(b))
+	distances := make([]keyDistance, len(toSort))
+	for i, k := range toSort {
+		distances[i] = keyDistance{key: k, distance: center.Distance(k)}
+	}
+	slices.SortFunc(distances, func(a, b keyDistance) int {
+		return a.distance.Cmp(b.distance)
 	})
-	return toSortCopy
+	sorted := make([]Key, len(distances))
+	for i, d := range distances {
+		sorted[i] = d.key
+	}
+	return sorted
 }

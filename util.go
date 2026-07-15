@@ -1,6 +1,7 @@
 package kbucket
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -26,10 +27,10 @@ const PeerIDPreimageMaxCpl uint = 15
 // peer.ID or a util.Key. This unifies the keyspace
 type ID []byte
 
+// cmp compares two IDs in the XOR keyspace, where the distance ordering is
+// the lexicographic ordering of the raw bytes.
 func (id ID) cmp(other ID) int {
-	a := ks.Key{Space: ks.XORKeySpace, Bytes: id}
-	b := ks.Key{Space: ks.XORKeySpace, Bytes: other}
-	return a.Cmp(b)
+	return bytes.Compare(id, other)
 }
 
 func Xor(a, b ID) ID {
