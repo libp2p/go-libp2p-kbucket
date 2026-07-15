@@ -35,7 +35,7 @@ func TestSortClosestPeersIsSorted(t *testing.T) {
 		for i := 1; i < len(sorted); i++ {
 			prev := Xor(target, ConvertPeerID(sorted[i-1]))
 			cur := Xor(target, ConvertPeerID(sorted[i]))
-			if prev.cmp(cur) > 0 {
+			if prev.compare(cur) > 0 {
 				t.Fatalf("n=%d: not sorted at index %d", n, i)
 			}
 		}

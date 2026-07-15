@@ -27,9 +27,9 @@ const PeerIDPreimageMaxCpl uint = 15
 // peer.ID or a util.Key. This unifies the keyspace
 type ID []byte
 
-// cmp compares two IDs in the XOR keyspace, where the distance ordering is
+// compare compares two IDs in the XOR keyspace, where the distance ordering is
 // the lexicographic ordering of the raw bytes.
-func (id ID) cmp(other ID) int {
+func (id ID) compare(other ID) int {
 	return bytes.Compare(id, other)
 }
 
@@ -61,7 +61,7 @@ func Closer(a, b peer.ID, key string) bool {
 	adist := Xor(aid, tgt)
 	bdist := Xor(bid, tgt)
 
-	return adist.cmp(bdist) < 0
+	return adist.compare(bdist) < 0
 }
 
 // GenRandPeerID generates a random peerID sharing a common prefix of length

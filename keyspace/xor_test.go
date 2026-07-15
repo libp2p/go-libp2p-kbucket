@@ -56,7 +56,7 @@ func TestXorKeySpace(t *testing.T) {
 	for i := 1; i < len(ks); i++ {
 		keyA := ks[i][0]
 		keyB := ks[i-1][0]
-		if keyB.Cmp(keyA) == keyA.Cmp(keyB) {
+		if keyB.Compare(keyA) == keyA.Compare(keyB) {
 			t.Errorf("less should be different.")
 		}
 

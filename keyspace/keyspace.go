@@ -17,12 +17,12 @@ type Key struct {
 	Bytes []byte
 }
 
-// Cmp returns an integer that compares the two Keys.
-func (k1 Key) Cmp(k2 Key) int {
+// Compare returns an integer that compares the two Keys.
+func (k1 Key) Compare(k2 Key) int {
 	if k1.Space != k2.Space {
 		panic("k1 and k2 not in same key space.")
 	}
-	return k1.Space.Cmp(k1, k2)
+	return k1.Space.Compare(k1, k2)
 }
 
 // Equal returns whether this key is equal to another.
@@ -50,8 +50,8 @@ type KeySpace interface {
 	Equal(Key, Key) bool
 	// Distance returns the distance metric in this key space
 	Distance(Key, Key) *big.Int
-	// Cmp returns an integer comparing two keys.
-	Cmp(Key, Key) int
+	// Compare returns an integer comparing two keys.
+	Compare(Key, Key) int
 }
 
 // keyDistance holds a Key alongside its precomputed distance to a center Key.

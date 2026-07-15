@@ -38,7 +38,7 @@ func (pds *peerDistanceSorter) appendPeersFromList(l *list.List) {
 
 func (pds *peerDistanceSorter) sort() {
 	slices.SortFunc(pds.peers, func(a, b peerDistance) int {
-		return a.distance.cmp(b.distance)
+		return a.distance.compare(b.distance)
 	})
 }
 

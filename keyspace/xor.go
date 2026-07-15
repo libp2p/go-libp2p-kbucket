@@ -30,9 +30,9 @@ func (s *xorKeySpace) Key(id []byte) Key {
 
 }
 
-// Cmp returns an integer comparing two keys in this key space. The result will
-// be 0 if k1 == k2, -1 if k1 < k2, and +1 if k1 > k2.
-func (s *xorKeySpace) Cmp(k1, k2 Key) int {
+// Compare returns an integer comparing two keys in this key space. The result
+// will be 0 if k1 == k2, -1 if k1 < k2, and +1 if k1 > k2.
+func (s *xorKeySpace) Compare(k1, k2 Key) int {
 	return bytes.Compare(k1.Bytes, k2.Bytes)
 }
 
