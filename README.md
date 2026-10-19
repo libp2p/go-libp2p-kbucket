@@ -6,7 +6,7 @@
 
 > A kbucket implementation for use as a routing table in go-libp2p-kad-dht
 
-## Documenation
+## Documentation
 
 See https://pkg.go.dev/github.com/libp2p/go-libp2p-kbucket
 
